@@ -4,8 +4,8 @@ const vk = @import("vulkan");
 const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
 
-const vkb = dispatch.vkb();
-const vki = dispatch.vki();
+const vkb = dispatch.vkb;
+const vki = dispatch.vki;
 
 const mem = std.mem;
 
@@ -40,6 +40,7 @@ pub const Options = struct {
     api_version: u32 = vk.API_VERSION_1_0,
     extensions: []const [*:0]const u8 = &.{},
     layers: []const [*:0]const u8 = &.{},
+    headless: bool = false,
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
     debug_callback: DebugCallback = default_debug_callback,
     debug_message_severity: DebugMessageSeverity = default_message_severity,
@@ -57,12 +58,16 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
         .api_version = options.api_version,
     };
 
-    // TODO: better extension checking
-    var extensions = try getRequiredExtensions(allocator, options);
+    const available_extensions = try getAvailableExtensions(allocator);
+    defer allocator.free(available_extensions);
+
+    const available_layers = try getAvailableLayers(allocator);
+    defer allocator.free(available_layers);
+
+    var extensions = try getRequiredExtensions(allocator, options, available_extensions);
     defer extensions.deinit();
 
-    // TODO: better layer checking
-    var layers = try getRequiredLayers(allocator, options);
+    var layers = try getRequiredLayers(allocator, options, available_layers);
     defer layers.deinit();
 
     const next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
@@ -80,9 +85,9 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
         .p_next = next,
     };
 
-    const instance = try vkb.createInstance(&instance_info, options.allocation_callbacks);
+    const instance = try vkb().createInstance(&instance_info, options.allocation_callbacks);
     try dispatch.initInstanceDispatch(instance, loader);
-    errdefer vki.destroyInstance(instance, options.allocation_callbacks);
+    errdefer vki().destroyInstance(instance, options.allocation_callbacks);
 
     const debug_messenger = try createDebugMessenger(instance, options);
     errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
@@ -95,7 +100,8 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
 }
 
 pub fn deinit(self: @This()) void {
-    vki.destroyInstance(self.handle, self.allocation_callbacks);
+    destroyDebugMessenger(self.handle, self.debug_messenger, self.allocation_callbacks);
+    vki().destroyInstance(self.handle, self.allocation_callbacks);
 }
 
 fn defaultDebugMessageCallback(
@@ -129,7 +135,7 @@ fn createDebugMessenger(instance: vk.Instance, options: Options) !DebugMessenger
         .pfn_user_callback = options.debug_callback,
     };
 
-    return vki.createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
+    return vki().createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
 }
 
 fn destroyDebugMessenger(
@@ -139,35 +145,161 @@ fn destroyDebugMessenger(
 ) void {
     if (!build_options.enable_validation) return;
 
-    vki.destroyDebugUtilsMessengerEXT(instance, debug_messenger, allocation_callbacks);
+    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger, allocation_callbacks);
 }
 
 fn logWarning(result: vk.Result, src: std.builtin.SourceLocation) void {
     std.log.warn("vulkan call returned {s}, ({s}:{d})", .{ @tagName(result), src.file, src.line });
 }
 
-fn getRequiredExtensions(allocator: mem.Allocator, options: Options) !std.ArrayList([*:0]const u8) {
+fn isExtensionAvailable(
+    available_extensions: []const vk.ExtensionProperties,
+    extension: [*:0]const u8,
+) bool {
+    for (available_extensions) |ext| {
+        const name: [*:0]const u8 = @ptrCast(&ext.extension_name);
+        if (mem.orderZ(u8, name, extension) == .eq) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn addExtension(
+    extensions: *std.ArrayList([*:0]const u8),
+    available_extensions: []const vk.ExtensionProperties,
+    new_extension: [*:0]const u8,
+) !bool {
+    if (isExtensionAvailable(available_extensions, new_extension)) {
+        try extensions.append(new_extension);
+        return true;
+    }
+    return false;
+}
+
+fn getRequiredExtensions(
+    allocator: mem.Allocator,
+    options: Options,
+    available_extensions: []const vk.ExtensionProperties,
+) !std.ArrayList([*:0]const u8) {
     var extensions = std.ArrayList([*:0]const u8).init(allocator);
     errdefer extensions.deinit();
 
-    try extensions.appendSlice(options.extensions);
+    for (options.extensions) |ext| {
+        if (!try addExtension(&extensions, available_extensions, ext)) {
+            return error.RequestedExtensionNotAvailable;
+        }
+    }
+
+    if (!options.headless) {
+        if (!try addExtension(&extensions, available_extensions, vk.extension_info.khr_surface.name)) {
+            return error.SurfaceExtensionNotAvailable;
+        }
+
+        const windowing_extensions: []const [*:0]const u8 = switch (builtin.os.tag) {
+            .windows => &.{vk.extension_info.khr_win_32_surface.name},
+            .macos => &.{vk.extension_info.ext_metal_surface.name},
+            .linux => &.{
+                vk.extension_info.khr_xlib_surface,
+                vk.extension_info.khr_xcb_surface,
+                vk.extension_info.khr_wayland_surface,
+            },
+            else => @compileError("unsupported platform"),
+        };
+
+        var added_one = false;
+        for (windowing_extensions) |ext| {
+            added_one = try addExtension(&extensions, available_extensions, ext) or added_one;
+        }
+
+        if (!added_one) return error.WindowingExtensionNotAvailable;
+    }
 
     if (build_options.enable_validation) {
-        try extensions.appendSlice(&debug_extensions);
+        for (debug_extensions) |ext| {
+            if (!try addExtension(&extensions, available_extensions, ext)) {
+                return error.DebugMessengerExtensionsNotAvailable;
+            }
+        }
     }
 
     return extensions;
 }
 
-fn getRequiredLayers(allocator: mem.Allocator, options: Options) !std.ArrayList([*:0]const u8) {
+fn isLayerAvailable(
+    available_layers: []const vk.LayerProperties,
+    layer: [*:0]const u8,
+) bool {
+    for (available_layers) |l| {
+        const name: [*:0]const u8 = @ptrCast(&l.layer_name);
+        if (mem.orderZ(u8, name, layer) == .eq) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn addLayer(
+    layers: *std.ArrayList([*:0]const u8),
+    available_layers: []const vk.LayerProperties,
+    new_layer: [*:0]const u8,
+) !bool {
+    if (isLayerAvailable(available_layers, new_layer)) {
+        try layers.append(new_layer);
+        return true;
+    }
+    return false;
+}
+
+fn getRequiredLayers(
+    allocator: mem.Allocator,
+    options: Options,
+    available_layers: []const vk.LayerProperties,
+) !std.ArrayList([*:0]const u8) {
     var layers = std.ArrayList([*:0]const u8).init(allocator);
     errdefer layers.deinit();
 
-    try layers.appendSlice(options.layers);
+    for (options.layers) |layer| {
+        if (!try addLayer(&layers, available_layers, layer)) {
+            return error.RequestedLayerNotAvailable;
+        }
+    }
 
     if (build_options.enable_validation) {
-        try layers.appendSlice(&validation_layers);
+        for (validation_layers) |layer| {
+            if (!try addLayer(&layers, available_layers, layer)) {
+                return error.ValidationLayersNotAvailable;
+            }
+        }
     }
 
     return layers;
+}
+
+fn getAvailableExtensions(allocator: mem.Allocator) ![]vk.ExtensionProperties {
+    var extension_count: u32 = undefined;
+    var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
+    if (result != .success) logWarning(result, @src());
+
+    const extension_properties = try allocator.alloc(vk.ExtensionProperties, extension_count);
+    errdefer allocator.free(extension_properties);
+
+    result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, extension_properties.ptr);
+    if (result != .success) logWarning(result, @src());
+
+    return extension_properties;
+}
+
+fn getAvailableLayers(allocator: mem.Allocator) ![]vk.LayerProperties {
+    var layer_count: u32 = undefined;
+    var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
+    if (result != .success) logWarning(result, @src());
+
+    const layer_properties = try allocator.alloc(vk.LayerProperties, layer_count);
+    errdefer allocator.free(layer_properties);
+
+    result = try vkb().enumerateInstanceLayerProperties(&layer_count, layer_properties.ptr);
+    if (result != .success) logWarning(result, @src());
+
+    return layer_properties;
 }

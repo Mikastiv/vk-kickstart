@@ -1,3 +1,4 @@
+const std = @import("std");
 const vk = @import("vulkan");
 const build_options = @import("build_options");
 const root = @import("root");
@@ -35,16 +36,19 @@ pub fn initDeviceDispatch(dev: vk.Device) !void {
     }
 }
 
-pub fn vkb() *const BaseDispatch {
-    return &base;
+pub fn vkb() BaseDispatch {
+    std.debug.assert(base_init);
+    return base;
 }
 
-pub fn vki() *const InstanceDispatch {
-    return &instance;
+pub fn vki() InstanceDispatch {
+    std.debug.assert(instance_init);
+    return instance;
 }
 
-pub fn vkd() *const DeviceDispatch {
-    return &device;
+pub fn vkd() DeviceDispatch {
+    std.debug.assert(device_init);
+    return device;
 }
 
 pub const BaseDispatch = vk.BaseWrapper(.{
