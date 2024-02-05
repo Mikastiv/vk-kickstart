@@ -31,13 +31,15 @@ const default_message_type = if (build_options.enable_validation) .{
 handle: vk.Instance,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 debug_messenger: DebugMessenger,
+api_version: u32,
 
 pub const Options = struct {
     app_name: [*:0]const u8 = "",
     app_version: u32 = 0,
     engine_name: [*:0]const u8 = "",
     engine_version: u32 = 0,
-    api_version: u32 = vk.API_VERSION_1_0,
+    required_version: u32 = vk.API_VERSION_1_0,
+    desired_version: u32 = vk.API_VERSION_1_0,
     extensions: []const [*:0]const u8 = &.{},
     layers: []const [*:0]const u8 = &.{},
     headless: bool = false,
@@ -50,12 +52,17 @@ pub const Options = struct {
 pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This() {
     try dispatch.initBaseDispatch(loader);
 
+    const api_version = if (options.required_version > vk.API_VERSION_1_0 or options.desired_version > vk.API_VERSION_1_0)
+        try getAppropriateApiVersion(options.required_version, options.desired_version)
+    else
+        vk.API_VERSION_1_0;
+
     const app_info = vk.ApplicationInfo{
         .p_application_name = options.app_name,
         .application_version = options.app_version,
         .p_engine_name = options.engine_name,
         .engine_version = options.engine_version,
-        .api_version = options.api_version,
+        .api_version = api_version,
     };
 
     const available_extensions = try getAvailableExtensions(allocator);
@@ -96,6 +103,7 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
         .handle = instance,
         .allocation_callbacks = options.allocation_callbacks,
         .debug_messenger = debug_messenger,
+        .api_version = api_version,
     };
 }
 
@@ -146,10 +154,6 @@ fn destroyDebugMessenger(
     if (!build_options.enable_validation) return;
 
     vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger, allocation_callbacks);
-}
-
-fn logWarning(result: vk.Result, src: std.builtin.SourceLocation) void {
-    std.log.warn("vulkan call returned {s}, ({s}:{d})", .{ @tagName(result), src.file, src.line });
 }
 
 fn isExtensionAvailable(
@@ -277,29 +281,41 @@ fn getRequiredLayers(
 }
 
 fn getAvailableExtensions(allocator: mem.Allocator) ![]vk.ExtensionProperties {
-    var extension_count: u32 = undefined;
+    var extension_count: u32 = 0;
     var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
-    if (result != .success) logWarning(result, @src());
+    if (result != .success) return error.EnumerateExtensionsFailed;
 
     const extension_properties = try allocator.alloc(vk.ExtensionProperties, extension_count);
     errdefer allocator.free(extension_properties);
 
-    result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, extension_properties.ptr);
-    if (result != .success) logWarning(result, @src());
+    while (true) {
+        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, extension_properties.ptr);
+        if (result == .success) break;
+    }
 
     return extension_properties;
 }
 
 fn getAvailableLayers(allocator: mem.Allocator) ![]vk.LayerProperties {
-    var layer_count: u32 = undefined;
+    var layer_count: u32 = 0;
     var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
-    if (result != .success) logWarning(result, @src());
+    if (result != .success) return error.EnumerateLayersFailed;
 
     const layer_properties = try allocator.alloc(vk.LayerProperties, layer_count);
     errdefer allocator.free(layer_properties);
 
-    result = try vkb().enumerateInstanceLayerProperties(&layer_count, layer_properties.ptr);
-    if (result != .success) logWarning(result, @src());
+    while (true) {
+        result = try vkb().enumerateInstanceLayerProperties(&layer_count, layer_properties.ptr);
+        if (result == .success) break;
+    }
 
     return layer_properties;
+}
+
+fn getAppropriateApiVersion(required_version: u32, desired_version: u32) !u32 {
+    const instance_version = try vkb().enumerateInstanceVersion();
+
+    if (instance_version < required_version) return error.RequiredVersionNotAvailable;
+    if (instance_version >= desired_version) return desired_version;
+    return instance_version;
 }
