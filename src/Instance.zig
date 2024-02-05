@@ -12,8 +12,25 @@ const mem = std.mem;
 const validation_layers = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
 const debug_extensions = [_][*:0]const u8{vk.extension_info.ext_debug_utils.name};
 
+const DebugMessenger = if (build_options.enable_validation) vk.DebugUtilsMessengerEXT else void;
+const DebugCallback = if (build_options.enable_validation) vk.PfnDebugUtilsMessengerCallbackEXT else void;
+const DebugMessageSeverity = if (build_options.enable_validation) vk.DebugUtilsMessageSeverityFlagsEXT else void;
+const DebugMessageType = if (build_options.enable_validation) vk.DebugUtilsMessageTypeFlagsEXT else void;
+
+const default_debug_callback = if (build_options.enable_validation) defaultDebugMessageCallback else {};
+const default_message_severity = if (build_options.enable_validation) .{
+    .warning_bit_ext = true,
+    .error_bit_ext = true,
+} else {};
+const default_message_type = if (build_options.enable_validation) .{
+    .general_bit_ext = true,
+    .validation_bit_ext = true,
+    .performance_bit_ext = true,
+} else {};
+
 handle: vk.Instance,
-allocation_callbacks: ?*vk.AllocationCallbacks,
+allocation_callbacks: ?*const vk.AllocationCallbacks,
+debug_messenger: DebugMessenger,
 
 pub const Options = struct {
     app_name: [*:0]const u8 = "",
@@ -21,19 +38,12 @@ pub const Options = struct {
     engine_name: [*:0]const u8 = "",
     engine_version: u32 = 0,
     api_version: u32 = vk.API_VERSION_1_0,
-    headless: bool = false,
     extensions: []const [*:0]const u8 = &.{},
     layers: []const [*:0]const u8 = &.{},
-    debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
-    debug_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = .{
-        .warning_bit_ext = true,
-        .error_bit_ext = true,
-    },
-    debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
-        .general_bit_ext = true,
-        .validation_bit_ext = true,
-        .performance_bit_ext = true,
-    },
+    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
+    debug_callback: DebugCallback = default_debug_callback,
+    debug_message_severity: DebugMessageSeverity = default_message_severity,
+    debug_message_type: DebugMessageType = default_message_type,
 };
 
 pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This() {
@@ -70,10 +80,18 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
         .p_next = next,
     };
 
-    const instance = try vkb.createInstance(&instance_info, null);
+    const instance = try vkb.createInstance(&instance_info, options.allocation_callbacks);
     try dispatch.initInstanceDispatch(instance, loader);
+    errdefer vki.destroyInstance(instance, options.allocation_callbacks);
 
-    return .{ .handle = instance, .allocation_callbacks = null };
+    const debug_messenger = try createDebugMessenger(instance, options);
+    errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
+
+    return .{
+        .handle = instance,
+        .allocation_callbacks = options.allocation_callbacks,
+        .debug_messenger = debug_messenger,
+    };
 }
 
 pub fn deinit(self: @This()) void {
@@ -100,6 +118,28 @@ fn defaultDebugMessageCallback(
         }
     }
     return vk.FALSE;
+}
+
+fn createDebugMessenger(instance: vk.Instance, options: Options) !DebugMessenger {
+    if (!build_options.enable_validation) return;
+
+    const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
+        .message_severity = options.debug_message_severity,
+        .message_type = options.debug_message_type,
+        .pfn_user_callback = options.debug_callback,
+    };
+
+    return vki.createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
+}
+
+fn destroyDebugMessenger(
+    instance: vk.Instance,
+    debug_messenger: DebugMessenger,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
+) void {
+    if (!build_options.enable_validation) return;
+
+    vki.destroyDebugUtilsMessengerEXT(instance, debug_messenger, allocation_callbacks);
 }
 
 fn logWarning(result: vk.Result, src: std.builtin.SourceLocation) void {
@@ -130,36 +170,4 @@ fn getRequiredLayers(allocator: mem.Allocator, options: Options) !std.ArrayList(
     }
 
     return layers;
-}
-
-fn validationLayerSupported(allocator: mem.Allocator) !bool {
-    var layer_count: u32 = undefined;
-    var result = try vkb.enumerateInstanceLayerProperties(&layer_count, null);
-    if (result != .success) {
-        logWarning(result, @src());
-    }
-
-    const layer_properties = try allocator.alloc(vk.LayerProperties, layer_count);
-    defer allocator.free(layer_properties);
-
-    result = try vkb.enumerateInstanceLayerProperties(&layer_count, layer_properties.ptr);
-    if (result != .success) {
-        logWarning(result, @src());
-    }
-
-    for (validation_layers) |layer_name| {
-        var layer_found = false;
-
-        for (layer_properties) |layer| {
-            const name: [*:0]const u8 = @ptrCast(&layer.layer_name);
-            if (mem.orderZ(u8, name, layer_name) == .eq) {
-                layer_found = true;
-                break;
-            }
-        }
-
-        if (!layer_found) return false;
-    }
-
-    return true;
 }
