@@ -9,8 +9,7 @@ const vki = dispatch.vki;
 
 const mem = std.mem;
 
-const validation_layers = [_][*:0]const u8{"VK_LAYER_KHRONOS_validation"};
-const debug_extensions = [_][*:0]const u8{vk.extension_info.ext_debug_utils.name};
+const validation_layer: [*:0]const u8 = "VK_LAYER_KHRONOS_validation";
 
 const DebugMessenger = if (build_options.enable_validation) vk.DebugUtilsMessengerEXT else void;
 const DebugCallback = if (build_options.enable_validation) vk.PfnDebugUtilsMessengerCallbackEXT else void;
@@ -220,10 +219,8 @@ fn getRequiredExtensions(
     }
 
     if (build_options.enable_validation) {
-        for (debug_extensions) |ext| {
-            if (!try addExtension(&extensions, available_extensions, ext)) {
-                return error.DebugMessengerExtensionsNotAvailable;
-            }
+        if (!try addExtension(&extensions, available_extensions, vk.extension_info.ext_debug_utils.name)) {
+            return error.DebugMessengerExtensionNotAvailable;
         }
     }
 
@@ -270,10 +267,8 @@ fn getRequiredLayers(
     }
 
     if (build_options.enable_validation) {
-        for (validation_layers) |layer| {
-            if (!try addLayer(&layers, available_layers, layer)) {
-                return error.ValidationLayersNotAvailable;
-            }
+        if (!try addLayer(&layers, available_layers, validation_layer)) {
+            return error.ValidationLayersNotAvailable;
         }
     }
 

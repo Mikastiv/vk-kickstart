@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
     };
 
     const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layer");
+
     const build_options = b.addOptions();
     build_options.addOption(bool, "enable_validation", enable_validation orelse default_validation);
 
