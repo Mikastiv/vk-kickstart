@@ -20,7 +20,8 @@ pub const Options = struct {
     separate_transfer_queue: bool = false,
     separate_compute_queue: bool = false,
     required_mem_size: vk.DeviceSize = 0,
-    extensions: []const [*:0]const u8 = &.{},
+    required_features: vk.PhysicalDeviceFeatures = .{},
+    required_extensions: []const [*:0]const u8 = &.{},
 };
 
 pub fn init(
@@ -182,7 +183,9 @@ fn isDeviceSuitable(
     if (options.separate_transfer_queue and device.separate_transfer_queue_idx == null) return false;
     if (options.separate_compute_queue and device.separate_compute_queue_idx == null) return false;
 
-    for (options.extensions) |ext| {
+    if (!supportsRequiredFeatures(device.features, options.required_features)) return false;
+
+    for (options.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
             return false;
         }
@@ -207,6 +210,65 @@ fn isDeviceSuitable(
         return false;
     }
 
+    return true;
+}
+
+fn supportsRequiredFeatures(available: vk.PhysicalDeviceFeatures, required: vk.PhysicalDeviceFeatures) bool {
+    if (required.alpha_to_one == vk.TRUE and available.alpha_to_one == vk.FALSE) return false;
+    if (required.depth_bias_clamp == vk.TRUE and available.depth_bias_clamp == vk.FALSE) return false;
+    if (required.depth_bounds == vk.TRUE and available.depth_bounds == vk.FALSE) return false;
+    if (required.depth_clamp == vk.TRUE and available.depth_clamp == vk.FALSE) return false;
+    if (required.draw_indirect_first_instance == vk.TRUE and available.draw_indirect_first_instance == vk.FALSE) return false;
+    if (required.dual_src_blend == vk.TRUE and available.dual_src_blend == vk.FALSE) return false;
+    if (required.fill_mode_non_solid == vk.TRUE and available.fill_mode_non_solid == vk.FALSE) return false;
+    if (required.fragment_stores_and_atomics == vk.TRUE and available.fragment_stores_and_atomics == vk.FALSE) return false;
+    if (required.full_draw_index_uint_32 == vk.TRUE and available.full_draw_index_uint_32 == vk.FALSE) return false;
+    if (required.geometry_shader == vk.TRUE and available.geometry_shader == vk.FALSE) return false;
+    if (required.image_cube_array == vk.TRUE and available.image_cube_array == vk.FALSE) return false;
+    if (required.independent_blend == vk.TRUE and available.independent_blend == vk.FALSE) return false;
+    if (required.inherited_queries == vk.TRUE and available.inherited_queries == vk.FALSE) return false;
+    if (required.large_points == vk.TRUE and available.large_points == vk.FALSE) return false;
+    if (required.logic_op == vk.TRUE and available.logic_op == vk.FALSE) return false;
+    if (required.multi_draw_indirect == vk.TRUE and available.multi_draw_indirect == vk.FALSE) return false;
+    if (required.multi_viewport == vk.TRUE and available.multi_viewport == vk.FALSE) return false;
+    if (required.occlusion_query_precise == vk.TRUE and available.occlusion_query_precise == vk.FALSE) return false;
+    if (required.pipeline_statistics_query == vk.TRUE and available.pipeline_statistics_query == vk.FALSE) return false;
+    if (required.robust_buffer_access == vk.TRUE and available.robust_buffer_access == vk.FALSE) return false;
+    if (required.sample_rate_shading == vk.TRUE and available.sample_rate_shading == vk.FALSE) return false;
+    if (required.sampler_anisotropy == vk.TRUE and available.sampler_anisotropy == vk.FALSE) return false;
+    if (required.shader_clip_distance == vk.TRUE and available.shader_clip_distance == vk.FALSE) return false;
+    if (required.shader_cull_distance == vk.TRUE and available.shader_cull_distance == vk.FALSE) return false;
+    if (required.shader_float_64 == vk.TRUE and available.shader_float_64 == vk.FALSE) return false;
+    if (required.shader_image_gather_extended == vk.TRUE and available.shader_image_gather_extended == vk.FALSE) return false;
+    if (required.shader_int_16 == vk.TRUE and available.shader_int_16 == vk.FALSE) return false;
+    if (required.shader_int_64 == vk.TRUE and available.shader_int_64 == vk.FALSE) return false;
+    if (required.shader_resource_min_lod == vk.TRUE and available.shader_resource_min_lod == vk.FALSE) return false;
+    if (required.shader_resource_residency == vk.TRUE and available.shader_resource_residency == vk.FALSE) return false;
+    if (required.shader_tessellation_and_geometry_point_size == vk.TRUE and available.shader_tessellation_and_geometry_point_size == vk.FALSE) return false;
+    if (required.shader_sampled_image_array_dynamic_indexing == vk.TRUE and available.shader_sampled_image_array_dynamic_indexing == vk.FALSE) return false;
+    if (required.shader_storage_buffer_array_dynamic_indexing == vk.TRUE and available.shader_storage_buffer_array_dynamic_indexing == vk.FALSE) return false;
+    if (required.shader_storage_image_array_dynamic_indexing == vk.TRUE and available.shader_storage_image_array_dynamic_indexing == vk.FALSE) return false;
+    if (required.shader_storage_image_extended_formats == vk.TRUE and available.shader_storage_image_extended_formats == vk.FALSE) return false;
+    if (required.shader_storage_image_multisample == vk.TRUE and available.shader_storage_image_multisample == vk.FALSE) return false;
+    if (required.shader_storage_image_read_without_format == vk.TRUE and available.shader_storage_image_read_without_format == vk.FALSE) return false;
+    if (required.shader_storage_image_write_without_format == vk.TRUE and available.shader_storage_image_write_without_format == vk.FALSE) return false;
+    if (required.shader_uniform_buffer_array_dynamic_indexing == vk.TRUE and available.shader_uniform_buffer_array_dynamic_indexing == vk.FALSE) return false;
+    if (required.sparse_binding == vk.TRUE and available.sparse_binding == vk.FALSE) return false;
+    if (required.sparse_residency_2_samples == vk.TRUE and available.sparse_residency_2_samples == vk.FALSE) return false;
+    if (required.sparse_residency_4_samples == vk.TRUE and available.sparse_residency_4_samples == vk.FALSE) return false;
+    if (required.sparse_residency_8_samples == vk.TRUE and available.sparse_residency_8_samples == vk.FALSE) return false;
+    if (required.sparse_residency_16_samples == vk.TRUE and available.sparse_residency_16_samples == vk.FALSE) return false;
+    if (required.sparse_residency_aliased == vk.TRUE and available.sparse_residency_aliased == vk.FALSE) return false;
+    if (required.sparse_residency_buffer == vk.TRUE and available.sparse_residency_buffer == vk.FALSE) return false;
+    if (required.sparse_residency_image_2d == vk.TRUE and available.sparse_residency_image_2d == vk.FALSE) return false;
+    if (required.sparse_residency_image_3d == vk.TRUE and available.sparse_residency_image_3d == vk.FALSE) return false;
+    if (required.tessellation_shader == vk.TRUE and available.tessellation_shader == vk.FALSE) return false;
+    if (required.texture_compression_astc_ldr == vk.TRUE and available.texture_compression_astc_ldr == vk.FALSE) return false;
+    if (required.texture_compression_bc == vk.TRUE and available.texture_compression_bc == vk.FALSE) return false;
+    if (required.texture_compression_etc2 == vk.TRUE and available.texture_compression_etc2 == vk.FALSE) return false;
+    if (required.variable_multisample_rate == vk.TRUE and available.variable_multisample_rate == vk.FALSE) return false;
+    if (required.vertex_pipeline_stores_and_atomics == vk.TRUE and available.vertex_pipeline_stores_and_atomics == vk.FALSE) return false;
+    if (required.wide_lines == vk.TRUE and available.wide_lines == vk.FALSE) return false;
     return true;
 }
 
