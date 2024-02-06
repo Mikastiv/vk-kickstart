@@ -80,6 +80,7 @@ const PhysicalDeviceInfo = struct {
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     available_extensions: []vk.ExtensionProperties,
     queue_families: []vk.QueueFamilyProperties,
+    graphics_queue_idx: ?u32,
     present_queue_idx: ?u32,
     dedicated_transfer_queue_idx: ?u32,
     dedicated_compute_queue_idx: ?u32,
@@ -108,13 +109,13 @@ fn getPresentQueue(
     return null;
 }
 
-fn getDedicatedQueue(
+fn getQueueStrict(
     families: []vk.QueueFamilyProperties,
     wanted_flags: vk.QueueFlags,
     unwanted_flags: vk.QueueFlags,
 ) ?u32 {
     for (families, 0..) |family, i| {
-        if (family.queue_count == 0 or family.queue_flags.graphics_bit) continue;
+        if (family.queue_count == 0) continue;
 
         const idx: u32 = @intCast(i);
 
@@ -127,7 +128,7 @@ fn getDedicatedQueue(
     return null;
 }
 
-fn getSeparateQueue(
+fn getQueue(
     families: []vk.QueueFamilyProperties,
     wanted_flags: vk.QueueFlags,
     unwanted_flags: vk.QueueFlags,
@@ -186,6 +187,7 @@ fn isDeviceSuitable(
             return false;
         }
     }
+
     if (options.require_present) {
         if (device.present_queue_idx == null) return false;
         if (!isExtensionAvailable(device.available_extensions, vk.extension_info.khr_swapchain.name)) {
@@ -194,6 +196,15 @@ fn isDeviceSuitable(
         if (!try isCompatibleWithSurface(device.handle, surface.?)) {
             return false;
         }
+    }
+
+    const heap_count = device.memory_properties.memory_heap_count;
+    for (device.memory_properties.memory_heaps[0..heap_count]) |heap| {
+        if (heap.flags.device_local_bit and heap.size >= options.required_mem_size) {
+            break;
+        }
+    } else {
+        return false;
     }
 
     return true;
@@ -253,22 +264,23 @@ fn fetchPhysicalDeviceInfo(
 
     vki().getPhysicalDeviceQueueFamilyProperties(handle, &family_count, queue_families.ptr);
 
-    const dedicated_transfer = getDedicatedQueue(
+    const graphics_queue = getQueue(queue_families, .{ .graphics_bit = true }, .{});
+    const dedicated_transfer = getQueueStrict(
+        queue_families,
+        .{ .transfer_bit = true },
+        .{ .graphics_bit = true, .compute_bit = true },
+    );
+    const dedicated_compute = getQueueStrict(
+        queue_families,
+        .{ .compute_bit = true },
+        .{ .graphics_bit = true, .transfer_bit = true },
+    );
+    const separate_transfer = getQueue(
         queue_families,
         .{ .transfer_bit = true },
         .{ .compute_bit = true },
     );
-    const dedicated_compute = getDedicatedQueue(
-        queue_families,
-        .{ .compute_bit = true },
-        .{ .transfer_bit = true },
-    );
-    const separate_transfer = getSeparateQueue(
-        queue_families,
-        .{ .transfer_bit = true },
-        .{ .compute_bit = true },
-    );
-    const separate_compute = getSeparateQueue(
+    const separate_compute = getQueue(
         queue_families,
         .{ .compute_bit = true },
         .{ .transfer_bit = true },
@@ -282,6 +294,7 @@ fn fetchPhysicalDeviceInfo(
         .memory_properties = memory_properties,
         .available_extensions = extensions,
         .queue_families = queue_families,
+        .graphics_queue_idx = graphics_queue,
         .present_queue_idx = present_queue,
         .dedicated_transfer_queue_idx = dedicated_transfer,
         .dedicated_compute_queue_idx = dedicated_compute,
