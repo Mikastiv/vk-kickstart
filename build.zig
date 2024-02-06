@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
         },
     });
     kickstart.addOptions("build_options", build_options);
-    b.modules.put(b.dupe("vulkan"), vkzig_dep.module("vulkan-zig")) catch @panic("OOM");
+    b.modules.put(b.dupe("vulkan-zig"), vkzig_dep.module("vulkan-zig")) catch @panic("OOM");
 
     const lib_unit_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/root.zig" },

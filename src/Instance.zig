@@ -3,11 +3,10 @@ const builtin = @import("builtin");
 const vk = @import("vulkan");
 const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
+const mem = std.mem;
 
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
-
-const mem = std.mem;
 
 const validation_layer: [*:0]const u8 = "VK_LAYER_KHRONOS_validation";
 
@@ -92,7 +91,7 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
     };
 
     const instance = try vkb().createInstance(&instance_info, options.allocation_callbacks);
-    try dispatch.initInstanceDispatch(instance, loader);
+    try dispatch.initInstanceDispatch(instance);
     errdefer vki().destroyInstance(instance, options.allocation_callbacks);
 
     const debug_messenger = try createDebugMessenger(instance, options);
