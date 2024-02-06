@@ -10,7 +10,7 @@ features: vk.PhysicalDeviceFeatures,
 properties: vk.PhysicalDeviceProperties,
 memory_properties: vk.PhysicalDeviceMemoryProperties,
 
-pub const Options = struct {
+pub const Config = struct {
     name: ?[*:0]const u8 = null,
     required_api_version: u32 = vk.API_VERSION_1_0,
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
@@ -28,9 +28,9 @@ pub fn init(
     allocator: mem.Allocator,
     instance: vk.Instance,
     surface: ?vk.SurfaceKHR,
-    options: Options,
+    config: Config,
 ) !@This() {
-    if (options.require_present and surface == null) {
+    if (config.require_present and surface == null) {
         return error.NoSurfaceProvided;
     }
 
@@ -51,7 +51,7 @@ pub fn init(
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitable = try isDeviceSuitable(info, surface, options);
+        info.suitable = try isDeviceSuitable(info, surface, config);
     }
 
     const selected = physical_device_infos.items[0];
@@ -150,13 +150,13 @@ fn getQueue(
     return index;
 }
 
-fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
+fn comparePhysicalDevices(config: Config, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
     if (a.suitable != b.suitable) {
         return a.suitable;
     }
 
-    const a_is_prefered_type = a.properties.device_type == options.preferred_type;
-    const b_is_prefered_type = b.properties.device_type == options.preferred_type;
+    const a_is_prefered_type = a.properties.device_type == config.preferred_type;
+    const b_is_prefered_type = b.properties.device_type == config.preferred_type;
     if (a_is_prefered_type != b_is_prefered_type) {
         return a_is_prefered_type;
     }
@@ -169,29 +169,30 @@ fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDe
 fn isDeviceSuitable(
     device: *const PhysicalDeviceInfo,
     surface: ?vk.SurfaceKHR,
-    options: Options,
+    config: Config,
 ) !bool {
-    if (options.name) |n| {
+    if (config.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
         if (mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
-    if (device.properties.api_version < options.required_api_version) return false;
+    if (device.properties.api_version < config.required_api_version) return false;
 
-    if (options.dedicated_transfer_queue and device.dedicated_transfer_queue_idx == null) return false;
-    if (options.dedicated_compute_queue and device.dedicated_compute_queue_idx == null) return false;
-    if (options.separate_transfer_queue and device.separate_transfer_queue_idx == null) return false;
-    if (options.separate_compute_queue and device.separate_compute_queue_idx == null) return false;
+    if (config.dedicated_transfer_queue and device.dedicated_transfer_queue_idx == null) return false;
+    if (config.dedicated_compute_queue and device.dedicated_compute_queue_idx == null) return false;
+    if (config.separate_transfer_queue and device.separate_transfer_queue_idx == null) return false;
+    if (config.separate_compute_queue and device.separate_compute_queue_idx == null) return false;
 
-    if (!supportsRequiredFeatures(device.features, options.required_features)) return false;
+    // TODO: feature2
+    if (!supportsRequiredFeatures(device.features, config.required_features)) return false;
 
-    for (options.required_extensions) |ext| {
+    for (config.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
             return false;
         }
     }
 
-    if (options.require_present) {
+    if (config.require_present) {
         if (device.present_queue_idx == null) return false;
         if (!isExtensionAvailable(device.available_extensions, vk.extension_info.khr_swapchain.name)) {
             return false;
@@ -203,7 +204,7 @@ fn isDeviceSuitable(
 
     const heap_count = device.memory_properties.memory_heap_count;
     for (device.memory_properties.memory_heaps[0..heap_count]) |heap| {
-        if (heap.flags.device_local_bit and heap.size >= options.required_mem_size) {
+        if (heap.flags.device_local_bit and heap.size >= config.required_mem_size) {
             break;
         }
     } else {

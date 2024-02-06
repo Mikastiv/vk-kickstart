@@ -31,7 +31,7 @@ allocation_callbacks: ?*const vk.AllocationCallbacks,
 debug_messenger: DebugMessenger,
 api_version: u32,
 
-pub const Options = struct {
+pub const Config = struct {
     app_name: [*:0]const u8 = "",
     app_version: u32 = 0,
     engine_name: [*:0]const u8 = "",
@@ -46,19 +46,19 @@ pub const Options = struct {
     debug_message_type: DebugMessageType = default_message_type,
 };
 
-pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This() {
+pub fn init(allocator: mem.Allocator, loader: anytype, config: Config) !@This() {
     try dispatch.initBaseDispatch(loader);
 
-    const api_version = if (options.required_api_version > vk.API_VERSION_1_0)
-        try getAppropriateApiVersion(options.required_api_version)
+    const api_version = if (config.required_api_version > vk.API_VERSION_1_0)
+        try getAppropriateApiVersion(config.required_api_version)
     else
         vk.API_VERSION_1_0;
 
     const app_info = vk.ApplicationInfo{
-        .p_application_name = options.app_name,
-        .application_version = options.app_version,
-        .p_engine_name = options.engine_name,
-        .engine_version = options.engine_version,
+        .p_application_name = config.app_name,
+        .application_version = config.app_version,
+        .p_engine_name = config.engine_name,
+        .engine_version = config.engine_version,
         .api_version = api_version,
     };
 
@@ -68,16 +68,16 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
     const available_layers = try getAvailableLayers(allocator);
     defer allocator.free(available_layers);
 
-    var extensions = try getRequiredExtensions(allocator, options, available_extensions);
+    var extensions = try getRequiredExtensions(allocator, config, available_extensions);
     defer extensions.deinit();
 
-    var layers = try getRequiredLayers(allocator, options, available_layers);
+    var layers = try getRequiredLayers(allocator, config, available_layers);
     defer layers.deinit();
 
     const next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
-        .message_severity = options.debug_message_severity,
-        .message_type = options.debug_message_type,
-        .pfn_user_callback = options.debug_callback,
+        .message_severity = config.debug_message_severity,
+        .message_type = config.debug_message_type,
+        .pfn_user_callback = config.debug_callback,
     } else null;
 
     const instance_info = vk.InstanceCreateInfo{
@@ -89,16 +89,16 @@ pub fn init(allocator: mem.Allocator, loader: anytype, options: Options) !@This(
         .p_next = next,
     };
 
-    const instance = try vkb().createInstance(&instance_info, options.allocation_callbacks);
+    const instance = try vkb().createInstance(&instance_info, config.allocation_callbacks);
     try dispatch.initInstanceDispatch(instance);
-    errdefer vki().destroyInstance(instance, options.allocation_callbacks);
+    errdefer vki().destroyInstance(instance, config.allocation_callbacks);
 
-    const debug_messenger = try createDebugMessenger(instance, options);
-    errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
+    const debug_messenger = try createDebugMessenger(instance, config);
+    errdefer destroyDebugMessenger(instance, debug_messenger, config.allocation_callbacks);
 
     return .{
         .handle = instance,
-        .allocation_callbacks = options.allocation_callbacks,
+        .allocation_callbacks = config.allocation_callbacks,
         .debug_messenger = debug_messenger,
         .api_version = api_version,
     };
@@ -131,16 +131,16 @@ fn defaultDebugMessageCallback(
     return vk.FALSE;
 }
 
-fn createDebugMessenger(instance: vk.Instance, options: Options) !DebugMessenger {
+fn createDebugMessenger(instance: vk.Instance, config: Config) !DebugMessenger {
     if (!build_options.enable_validation) return;
 
     const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
-        .message_severity = options.debug_message_severity,
-        .message_type = options.debug_message_type,
-        .pfn_user_callback = options.debug_callback,
+        .message_severity = config.debug_message_severity,
+        .message_type = config.debug_message_type,
+        .pfn_user_callback = config.debug_callback,
     };
 
-    return vki().createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
+    return vki().createDebugUtilsMessengerEXT(instance, &debug_info, config.allocation_callbacks);
 }
 
 fn destroyDebugMessenger(
@@ -180,19 +180,19 @@ fn addExtension(
 
 fn getRequiredExtensions(
     allocator: mem.Allocator,
-    options: Options,
+    config: Config,
     available_extensions: []const vk.ExtensionProperties,
 ) !std.ArrayList([*:0]const u8) {
     var extensions = std.ArrayList([*:0]const u8).init(allocator);
     errdefer extensions.deinit();
 
-    for (options.extensions) |ext| {
+    for (config.extensions) |ext| {
         if (!try addExtension(&extensions, available_extensions, ext)) {
             return error.RequestedExtensionNotAvailable;
         }
     }
 
-    if (!options.headless) {
+    if (!config.headless) {
         if (!try addExtension(&extensions, available_extensions, vk.extension_info.khr_surface.name)) {
             return error.SurfaceExtensionNotAvailable;
         }
@@ -252,13 +252,13 @@ fn addLayer(
 
 fn getRequiredLayers(
     allocator: mem.Allocator,
-    options: Options,
+    config: Config,
     available_layers: []const vk.LayerProperties,
 ) !std.ArrayList([*:0]const u8) {
     var layers = std.ArrayList([*:0]const u8).init(allocator);
     errdefer layers.deinit();
 
-    for (options.layers) |layer| {
+    for (config.layers) |layer| {
         if (!try addLayer(&layers, available_layers, layer)) {
             return error.RequestedLayerNotAvailable;
         }
