@@ -76,4 +76,10 @@ const default_instance_functions = vk.InstanceCommandFlags{
     .getPhysicalDeviceFeatures = true,
     .getPhysicalDeviceFormatProperties = true,
     .getPhysicalDeviceImageFormatProperties = true,
+    .getPhysicalDeviceSurfaceSupportKHR = true,
+    .getPhysicalDeviceSurfaceFormatsKHR = true,
+    .getPhysicalDeviceSurfacePresentModesKHR = true,
+    .createDebugUtilsMessengerEXT = true,
+    .destroyDebugUtilsMessengerEXT = true,
+    .destroySurfaceKHR = true,
 };

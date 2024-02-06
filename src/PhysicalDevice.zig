@@ -12,11 +12,13 @@ memory_properties: vk.PhysicalDeviceMemoryProperties,
 
 pub const Options = struct {
     name: ?[*:0]const u8 = null,
-    required_version: u32 = vk.API_VERSION_1_0,
+    required_api_version: u32 = vk.API_VERSION_1_0,
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
     require_present: bool = true,
     dedicated_transfer_queue: bool = false,
     dedicated_compute_queue: bool = false,
+    separate_transfer_queue: bool = false,
+    separate_compute_queue: bool = false,
     required_mem_size: vk.DeviceSize = 0,
     extensions: []const [*:0]const u8 = &.{},
 };
@@ -43,15 +45,17 @@ pub fn init(
         physical_device_infos.deinit();
     }
     for (physical_device_handles) |handle| {
-        const physical_device = try fetchPhysicalDeviceInfo(allocator, handle);
+        const physical_device = try fetchPhysicalDeviceInfo(allocator, handle, surface);
         try physical_device_infos.append(physical_device);
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitability = try isDeviceSuitable(info, surface, options);
+        info.suitable = try isDeviceSuitable(info, surface, options);
     }
 
     const selected = physical_device_infos.items[0];
+    if (!selected.suitable) return error.NoSuitableDeviceFound;
+
     return .{
         .handle = selected.handle,
         .features = selected.features,
@@ -69,12 +73,6 @@ pub fn name(self: *const @This()) []const u8 {
     return mem.span(str);
 }
 
-const PhysicalDeviceSuitability = enum(u8) {
-    not_suitable,
-    partially,
-    suitable,
-};
-
 const PhysicalDeviceInfo = struct {
     handle: vk.PhysicalDevice,
     features: vk.PhysicalDeviceFeatures,
@@ -82,20 +80,29 @@ const PhysicalDeviceInfo = struct {
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     available_extensions: []vk.ExtensionProperties,
     queue_families: []vk.QueueFamilyProperties,
+    present_queue_idx: ?u32,
+    dedicated_transfer_queue_idx: ?u32,
+    dedicated_compute_queue_idx: ?u32,
+    separate_transfer_queue_idx: ?u32,
+    separate_compute_queue_idx: ?u32,
     portability_ext_available: bool,
-    suitability: PhysicalDeviceSuitability = .suitable,
+    suitable: bool = true,
 };
 
-fn getPresentQueue(physical_device: *const PhysicalDeviceInfo, surface: ?vk.SurfaceKHR) !?u32 {
+fn getPresentQueue(
+    handle: vk.PhysicalDevice,
+    families: []vk.QueueFamilyProperties,
+    surface: ?vk.SurfaceKHR,
+) !?u32 {
     if (surface == null) return null;
 
-    for (physical_device.queue_families, 0..) |family, i| {
+    for (families, 0..) |family, i| {
         if (family.queue_count == 0) continue;
 
-        const index: u32 = @intCast(i);
+        const idx: u32 = @intCast(i);
 
-        if (try vki().getPhysicalDeviceSurfaceSupportKHR(physical_device.handle, index, surface.?) == vk.TRUE) {
-            return index;
+        if (try vki().getPhysicalDeviceSurfaceSupportKHR(handle, idx, surface.?) == vk.TRUE) {
+            return idx;
         }
     }
     return null;
@@ -107,25 +114,43 @@ fn getDedicatedQueue(
     unwanted_flags: vk.QueueFlags,
 ) ?u32 {
     for (families, 0..) |family, i| {
-        if (family.queue_count == 0) continue;
+        if (family.queue_count == 0 or family.queue_flags.graphics_bit) continue;
 
-        const index: u32 = @intCast(i);
+        const idx: u32 = @intCast(i);
 
         const has_wanted = family.queue_flags.contains(wanted_flags);
         const no_unwanted = family.queue_flags.intersect(unwanted_flags).toInt() == vk.QueueFlags.toInt(.{});
-        if (!family.queue_flags.graphics_bit and has_wanted and no_unwanted) {
-            return index;
+        if (has_wanted and no_unwanted) {
+            return idx;
         }
     }
     return null;
 }
 
+fn getSeparateQueue(
+    families: []vk.QueueFamilyProperties,
+    wanted_flags: vk.QueueFlags,
+    unwanted_flags: vk.QueueFlags,
+) ?u32 {
+    var index: ?u32 = null;
+    for (families, 0..) |family, i| {
+        if (family.queue_count == 0 or family.queue_flags.graphics_bit) continue;
+
+        const idx: u32 = @intCast(i);
+
+        const has_wanted = family.queue_flags.contains(wanted_flags);
+        const no_unwanted = family.queue_flags.intersect(unwanted_flags).toInt() == vk.QueueFlags.toInt(.{});
+        if (has_wanted) {
+            if (no_unwanted) return idx;
+            if (index == null) index = idx;
+        }
+    }
+    return index;
+}
+
 fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
-    if (a.suitability != b.suitability) {
-        if (a.suitability == .suitable) return true;
-        if (b.suitability == .suitable) return false;
-        if (a.suitability == .partially) return true;
-        return false;
+    if (a.suitable != b.suitable) {
+        return a.suitable;
     }
 
     const a_is_prefered_type = a.properties.device_type == options.preferred_type;
@@ -135,53 +160,55 @@ fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDe
     }
 
     if (a.properties.api_version != b.properties.api_version) {
-        return a.properties.api_version > b.properties.api_version;
+        return a.properties.api_version >= b.properties.api_version;
     }
 }
 
 fn isDeviceSuitable(
-    physical_device: *const PhysicalDeviceInfo,
+    device: *const PhysicalDeviceInfo,
     surface: ?vk.SurfaceKHR,
     options: Options,
-) !PhysicalDeviceSuitability {
+) !bool {
     if (options.name) |n| {
-        const device_name: [*:0]const u8 = @ptrCast(&physical_device.properties.device_name);
-        if (mem.orderZ(u8, n, device_name) != .eq) return .not_suitable;
+        const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
+        if (mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
-    if (options.required_version < physical_device.properties.api_version) return .not_suitable;
+    if (device.properties.api_version < options.required_api_version) return false;
 
-    const dedicated_transfer = getDedicatedQueue(
-        physical_device.queue_families,
-        .{ .transfer_bit = true },
-        .{ .compute_bit = true },
-    );
-    const dedicated_compute = getDedicatedQueue(
-        physical_device.queue_families,
-        .{ .compute_bit = true },
-        .{ .transfer_bit = true },
-    );
-    const present_queue = try getPresentQueue(physical_device, surface);
-
-    if (options.dedicated_transfer_queue and dedicated_transfer == null) return .not_suitable;
-    if (options.dedicated_compute_queue and dedicated_compute == null) return .not_suitable;
-    if (options.require_present and present_queue == null) return .not_suitable;
+    if (options.dedicated_transfer_queue and device.dedicated_transfer_queue_idx == null) return false;
+    if (options.dedicated_compute_queue and device.dedicated_compute_queue_idx == null) return false;
+    if (options.separate_transfer_queue and device.separate_transfer_queue_idx == null) return false;
+    if (options.separate_compute_queue and device.separate_compute_queue_idx == null) return false;
 
     for (options.extensions) |ext| {
-        if (!isExtensionAvailable(physical_device.available_extensions, ext)) {
-            return .not_suitable;
+        if (!isExtensionAvailable(device.available_extensions, ext)) {
+            return false;
         }
     }
     if (options.require_present) {
-        if (!isExtensionAvailable(physical_device.available_extensions, vk.extension_info.khr_swapchain.name)) {
-            return .not_suitable;
+        if (device.present_queue_idx == null) return false;
+        if (!isExtensionAvailable(device.available_extensions, vk.extension_info.khr_swapchain.name)) {
+            return false;
+        }
+        if (!try isCompatibleWithSurface(device.handle, surface.?)) {
+            return false;
         }
     }
 
-    var suitable = PhysicalDeviceSuitability.suitable;
-    if (options.preferred_type != physical_device.properties.device_type) suitable = .partially;
+    return true;
+}
 
-    return suitable;
+fn isCompatibleWithSurface(handle: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
+    var format_count: u32 = 0;
+    var result = try vki().getPhysicalDeviceSurfaceFormatsKHR(handle, surface, &format_count, null);
+    if (result != .success) return false;
+
+    var present_mode_count: u32 = 0;
+    result = try vki().getPhysicalDeviceSurfacePresentModesKHR(handle, surface, &present_mode_count, null);
+    if (result != .success) return false;
+
+    return format_count > 0 and present_mode_count > 0;
 }
 
 fn isExtensionAvailable(
@@ -197,7 +224,11 @@ fn isExtensionAvailable(
     return false;
 }
 
-fn fetchPhysicalDeviceInfo(allocator: mem.Allocator, handle: vk.PhysicalDevice) !PhysicalDeviceInfo {
+fn fetchPhysicalDeviceInfo(
+    allocator: mem.Allocator,
+    handle: vk.PhysicalDevice,
+    surface: ?vk.SurfaceKHR,
+) !PhysicalDeviceInfo {
     const features = vki().getPhysicalDeviceFeatures(handle);
     const properties = vki().getPhysicalDeviceProperties(handle);
     const memory_properties = vki().getPhysicalDeviceMemoryProperties(handle);
@@ -222,6 +253,28 @@ fn fetchPhysicalDeviceInfo(allocator: mem.Allocator, handle: vk.PhysicalDevice) 
 
     vki().getPhysicalDeviceQueueFamilyProperties(handle, &family_count, queue_families.ptr);
 
+    const dedicated_transfer = getDedicatedQueue(
+        queue_families,
+        .{ .transfer_bit = true },
+        .{ .compute_bit = true },
+    );
+    const dedicated_compute = getDedicatedQueue(
+        queue_families,
+        .{ .compute_bit = true },
+        .{ .transfer_bit = true },
+    );
+    const separate_transfer = getSeparateQueue(
+        queue_families,
+        .{ .transfer_bit = true },
+        .{ .compute_bit = true },
+    );
+    const separate_compute = getSeparateQueue(
+        queue_families,
+        .{ .compute_bit = true },
+        .{ .transfer_bit = true },
+    );
+    const present_queue = try getPresentQueue(handle, queue_families, surface);
+
     return .{
         .handle = handle,
         .features = features,
@@ -229,6 +282,11 @@ fn fetchPhysicalDeviceInfo(allocator: mem.Allocator, handle: vk.PhysicalDevice) 
         .memory_properties = memory_properties,
         .available_extensions = extensions,
         .queue_families = queue_families,
+        .present_queue_idx = present_queue,
+        .dedicated_transfer_queue_idx = dedicated_transfer,
+        .dedicated_compute_queue_idx = dedicated_compute,
+        .separate_transfer_queue_idx = separate_transfer,
+        .separate_compute_queue_idx = separate_compute,
         .portability_ext_available = isExtensionAvailable(extensions, vk.extension_info.khr_portability_subset.name),
     };
 }
