@@ -13,13 +13,11 @@ memory_properties: vk.PhysicalDeviceMemoryProperties,
 pub const Options = struct {
     name: ?[*:0]const u8 = null,
     required_version: u32 = vk.API_VERSION_1_0,
-    desired_version: u32 = vk.API_VERSION_1_0,
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
     require_present: bool = true,
     dedicated_transfer_queue: bool = false,
     dedicated_compute_queue: bool = false,
     required_mem_size: vk.DeviceSize = 0,
-    desired_mem_size: vk.DeviceSize = 0,
     extensions: []const [*:0]const u8 = &.{},
 };
 
@@ -50,7 +48,7 @@ pub fn init(
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitability = isDeviceSuitable(info, options);
+        info.suitability = try isDeviceSuitable(info, surface, options);
     }
 
     const selected = physical_device_infos.items[0];
@@ -72,9 +70,9 @@ pub fn name(self: *const @This()) []const u8 {
 }
 
 const PhysicalDeviceSuitability = enum(u8) {
-    no,
-    partial,
-    yes,
+    not_suitable,
+    partially,
+    suitable,
 };
 
 const PhysicalDeviceInfo = struct {
@@ -85,19 +83,49 @@ const PhysicalDeviceInfo = struct {
     available_extensions: []vk.ExtensionProperties,
     queue_families: []vk.QueueFamilyProperties,
     portability_ext_available: bool,
-    suitability: PhysicalDeviceSuitability = .yes,
+    suitability: PhysicalDeviceSuitability = .suitable,
 };
+
+fn getPresentQueue(physical_device: *const PhysicalDeviceInfo, surface: ?vk.SurfaceKHR) !?u32 {
+    if (surface == null) return null;
+
+    for (physical_device.queue_families, 0..) |family, i| {
+        if (family.queue_count == 0) continue;
+
+        const index: u32 = @intCast(i);
+
+        if (try vki().getPhysicalDeviceSurfaceSupportKHR(physical_device.handle, index, surface.?) == vk.TRUE) {
+            return index;
+        }
+    }
+    return null;
+}
+
+fn getDedicatedQueue(
+    families: []vk.QueueFamilyProperties,
+    wanted_flags: vk.QueueFlags,
+    unwanted_flags: vk.QueueFlags,
+) ?u32 {
+    for (families, 0..) |family, i| {
+        if (family.queue_count == 0) continue;
+
+        const index: u32 = @intCast(i);
+
+        const has_wanted = family.queue_flags.contains(wanted_flags);
+        const no_unwanted = family.queue_flags.intersect(unwanted_flags).toInt() == vk.QueueFlags.toInt(.{});
+        if (!family.queue_flags.graphics_bit and has_wanted and no_unwanted) {
+            return index;
+        }
+    }
+    return null;
+}
 
 fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
     if (a.suitability != b.suitability) {
-        if (a.suitability == .yes) return true;
-        if (b.suitability == .yes) return false;
-        if (a.suitability == .partial) return true;
+        if (a.suitability == .suitable) return true;
+        if (b.suitability == .suitable) return false;
+        if (a.suitability == .partially) return true;
         return false;
-    }
-
-    if (a.properties.api_version != b.properties.api_version) {
-        return a.properties.api_version > b.properties.api_version;
     }
 
     const a_is_prefered_type = a.properties.device_type == options.preferred_type;
@@ -105,20 +133,53 @@ fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDe
     if (a_is_prefered_type != b_is_prefered_type) {
         return a_is_prefered_type;
     }
+
+    if (a.properties.api_version != b.properties.api_version) {
+        return a.properties.api_version > b.properties.api_version;
+    }
 }
 
-fn isDeviceSuitable(physical_device: *const PhysicalDeviceInfo, options: Options) PhysicalDeviceSuitability {
+fn isDeviceSuitable(
+    physical_device: *const PhysicalDeviceInfo,
+    surface: ?vk.SurfaceKHR,
+    options: Options,
+) !PhysicalDeviceSuitability {
     if (options.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&physical_device.properties.device_name);
-        if (mem.orderZ(u8, n, device_name) != .eq) return .no;
+        if (mem.orderZ(u8, n, device_name) != .eq) return .not_suitable;
     }
 
-    if (options.required_version < physical_device.properties.api_version) return .no;
+    if (options.required_version < physical_device.properties.api_version) return .not_suitable;
 
-    var suitable = PhysicalDeviceSuitability.yes;
-    if (options.desired_version > physical_device.properties.api_version) suitable = .partial;
+    const dedicated_transfer = getDedicatedQueue(
+        physical_device.queue_families,
+        .{ .transfer_bit = true },
+        .{ .compute_bit = true },
+    );
+    const dedicated_compute = getDedicatedQueue(
+        physical_device.queue_families,
+        .{ .compute_bit = true },
+        .{ .transfer_bit = true },
+    );
+    const present_queue = try getPresentQueue(physical_device, surface);
 
-    if (options.preferred_type != physical_device.properties.device_type) suitable = .partial;
+    if (options.dedicated_transfer_queue and dedicated_transfer == null) return .not_suitable;
+    if (options.dedicated_compute_queue and dedicated_compute == null) return .not_suitable;
+    if (options.require_present and present_queue == null) return .not_suitable;
+
+    for (options.extensions) |ext| {
+        if (!isExtensionAvailable(physical_device.available_extensions, ext)) {
+            return .not_suitable;
+        }
+    }
+    if (options.require_present) {
+        if (!isExtensionAvailable(physical_device.available_extensions, vk.extension_info.khr_swapchain.name)) {
+            return .not_suitable;
+        }
+    }
+
+    var suitable = PhysicalDeviceSuitability.suitable;
+    if (options.preferred_type != physical_device.properties.device_type) suitable = .partially;
 
     return suitable;
 }
