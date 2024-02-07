@@ -7,6 +7,7 @@ pub const vki = dispatch.vki;
 pub const vkd = dispatch.vkd;
 pub const Instance = @import("Instance.zig");
 pub const PhysicalDevice = @import("PhysicalDevice.zig");
+pub const Device = @import("Device.zig");
 
 test "basic" {
     try testing.expect(true);

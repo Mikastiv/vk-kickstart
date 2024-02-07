@@ -4,7 +4,7 @@ const build_options = @import("build_options");
 const root = @import("root");
 
 const instance_functions = if (@hasDecl(root, "instance_functions")) root.instance_functions else default_instance_functions;
-const device_functions = if (@hasDecl(root, "device_functions")) root.device_functions else @compileError("missing device_functions in root");
+const device_functions = if (@hasDecl(root, "device_functions")) root.device_functions else default_device_functions;
 
 var base_init: bool = false;
 var base: BaseDispatch = undefined;
@@ -82,4 +82,8 @@ const default_instance_functions = vk.InstanceCommandFlags{
     .createDebugUtilsMessengerEXT = true,
     .destroyDebugUtilsMessengerEXT = true,
     .destroySurfaceKHR = true,
+};
+
+const default_device_functions = vk.DeviceCommandFlags{
+    .destroyDevice = true,
 };

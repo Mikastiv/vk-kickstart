@@ -71,6 +71,14 @@ pub fn init(allocator: mem.Allocator, loader: anytype, config: Config) !@This() 
     var extensions = try getRequiredExtensions(allocator, config, available_extensions);
     defer extensions.deinit();
 
+    const portability_enumeration_support = isExtensionAvailable(
+        available_extensions,
+        vk.extension_info.khr_portability_enumeration.name,
+    );
+    if (portability_enumeration_support) {
+        try extensions.append(vk.extension_info.khr_portability_enumeration.name);
+    }
+
     var layers = try getRequiredLayers(allocator, config, available_layers);
     defer layers.deinit();
 
@@ -81,6 +89,7 @@ pub fn init(allocator: mem.Allocator, loader: anytype, config: Config) !@This() 
     } else null;
 
     const instance_info = vk.InstanceCreateInfo{
+        .flags = if (portability_enumeration_support) .{ .enumerate_portability_bit_khr = true } else .{},
         .p_application_info = &app_info,
         .enabled_extension_count = @as(u32, @intCast(extensions.items.len)),
         .pp_enabled_extension_names = extensions.items.ptr,
