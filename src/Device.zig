@@ -14,16 +14,16 @@ allocation_callbacks: ?*const vk.AllocationCallbacks,
 
 pub fn init(
     allocator: mem.Allocator,
-    physical_device: PhysicalDevice,
+    physical_device: *const PhysicalDevice,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) !@This() {
-    const queue_create_infos = try createQueueInfos(allocator, &physical_device);
+    const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
     const device_info = vk.DeviceCreateInfo{
         .queue_create_info_count = @intCast(queue_create_infos.len),
         .p_queue_create_infos = queue_create_infos.ptr,
-        .p_enabled_features = &physical_device.features,
+        .p_enabled_features = physical_device.features,
         .enabled_extension_count = @intCast(physical_device.extensions.items.len),
         .pp_enabled_extension_names = physical_device.extensions.items.ptr,
     };
