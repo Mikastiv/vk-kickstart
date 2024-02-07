@@ -36,7 +36,7 @@ pub const Config = struct {
     app_version: u32 = 0,
     engine_name: [*:0]const u8 = "",
     engine_version: u32 = 0,
-    required_api_version: u32 = vk.API_VERSION_1_0,
+    required_api_version: u32 = vk.API_VERSION_1_1,
     extensions: []const [*:0]const u8 = &.{},
     layers: []const [*:0]const u8 = &.{},
     headless: bool = false,
@@ -49,10 +49,8 @@ pub const Config = struct {
 pub fn init(allocator: mem.Allocator, loader: anytype, config: Config) !@This() {
     try dispatch.initBaseDispatch(loader);
 
-    const api_version = if (config.required_api_version > vk.API_VERSION_1_0)
-        try getAppropriateApiVersion(config.required_api_version)
-    else
-        vk.API_VERSION_1_0;
+    const api_version = try getAppropriateApiVersion(config.required_api_version);
+    std.debug.assert(api_version >= vk.API_VERSION_1_1);
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = config.app_name,
@@ -317,6 +315,7 @@ fn getAvailableLayers(allocator: mem.Allocator) ![]vk.LayerProperties {
 fn getAppropriateApiVersion(required_version: u32) !u32 {
     const instance_version = try vkb().enumerateInstanceVersion();
 
-    if (instance_version < required_version) return error.RequiredVersionNotAvailable;
+    if (instance_version < required_version)
+        return error.RequiredVersionNotAvailable;
     return instance_version;
 }

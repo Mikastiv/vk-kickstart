@@ -1,6 +1,7 @@
 const std = @import("std");
 const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
+const Instance = @import("Instance.zig");
 const mem = std.mem;
 
 const vki = dispatch.vki;
@@ -9,6 +10,9 @@ const vki = dispatch.vki;
 handle: vk.PhysicalDevice,
 surface: vk.SurfaceKHR,
 features: vk.PhysicalDeviceFeatures,
+features_11: vk.PhysicalDeviceVulkan11Features,
+features_12: vk.PhysicalDeviceVulkan12Features,
+features_13: vk.PhysicalDeviceVulkan13Features,
 properties: vk.PhysicalDeviceProperties,
 memory_properties: vk.PhysicalDeviceMemoryProperties,
 extensions: std.ArrayList([*:0]const u8),
@@ -31,16 +35,19 @@ pub const Config = struct {
     compute_queue: QueuePreference = .none,
     required_mem_size: vk.DeviceSize = 0,
     required_features: vk.PhysicalDeviceFeatures = .{},
+    required_features_11: vk.PhysicalDeviceVulkan11Features = .{},
+    required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
+    required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
     required_extensions: []const [*:0]const u8 = &.{},
 };
 
 pub fn init(
     allocator: mem.Allocator,
-    instance: vk.Instance,
+    instance: *const Instance,
     surface: vk.SurfaceKHR,
     config: Config,
 ) !@This() {
-    const physical_device_handles = try getPhysicalDevices(allocator, instance);
+    const physical_device_handles = try getPhysicalDevices(allocator, instance.handle);
     defer allocator.free(physical_device_handles);
 
     var physical_device_infos = try std.ArrayList(PhysicalDeviceInfo).initCapacity(allocator, physical_device_handles.len);
@@ -52,7 +59,7 @@ pub fn init(
         physical_device_infos.deinit();
     }
     for (physical_device_handles) |handle| {
-        const physical_device = try fetchPhysicalDeviceInfo(allocator, handle, surface);
+        const physical_device = try fetchPhysicalDeviceInfo(allocator, handle, surface, instance.api_version);
         try physical_device_infos.append(physical_device);
     }
 
@@ -86,6 +93,9 @@ pub fn init(
         .handle = selected.handle,
         .surface = surface,
         .features = config.required_features,
+        .features_11 = config.required_features_11,
+        .features_12 = if (config.required_features_12) |f| f else .{},
+        .features_13 = if (config.required_features_13) |f| f else .{},
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
         .extensions = extensions,
@@ -117,9 +127,25 @@ pub fn name(self: *const @This()) []const u8 {
     return mem.span(str);
 }
 
+pub fn clone(self: *const @This()) !@This() {
+    const exts_copy = try self.extensions.clone();
+    for (exts_copy.items) |*ext| {
+        const span = std.mem.span(ext.*);
+        ext.* = try self.extensions.allocator.dupeZ(u8, span);
+    }
+
+    var copy = self.*;
+    copy.extensions = exts_copy;
+
+    return copy;
+}
+
 const PhysicalDeviceInfo = struct {
     handle: vk.PhysicalDevice,
     features: vk.PhysicalDeviceFeatures,
+    features_11: vk.PhysicalDeviceVulkan11Features,
+    features_12: vk.PhysicalDeviceVulkan12Features,
+    features_13: vk.PhysicalDeviceVulkan13Features,
     properties: vk.PhysicalDeviceProperties,
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     available_extensions: []vk.ExtensionProperties,
@@ -346,10 +372,26 @@ fn fetchPhysicalDeviceInfo(
     allocator: mem.Allocator,
     handle: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
+    instance_version: u32,
 ) !PhysicalDeviceInfo {
-    const features = vki().getPhysicalDeviceFeatures(handle);
     const properties = vki().getPhysicalDeviceProperties(handle);
     const memory_properties = vki().getPhysicalDeviceMemoryProperties(handle);
+
+    var features = vk.PhysicalDeviceFeatures{};
+    var features_11 = vk.PhysicalDeviceVulkan11Features{};
+    var features_12 = vk.PhysicalDeviceVulkan12Features{};
+    var features_13 = vk.PhysicalDeviceVulkan13Features{};
+
+    if (instance_version >= vk.API_VERSION_1_2)
+        features_11.p_next = &features_12;
+    if (instance_version >= vk.API_VERSION_1_3)
+        features_12.p_next = &features_13;
+
+    var features2 = vk.PhysicalDeviceFeatures2{ .features = .{} };
+    features2.p_next = &features_11;
+
+    vki().getPhysicalDeviceFeatures2(handle, &features2);
+    features = features2.features;
 
     var extension_count: u32 = 0;
     var result = try vki().enumerateDeviceExtensionProperties(handle, null, &extension_count, null);
@@ -397,6 +439,9 @@ fn fetchPhysicalDeviceInfo(
     return .{
         .handle = handle,
         .features = features,
+        .features_11 = features_11,
+        .features_12 = features_12,
+        .features_13 = features_13,
         .properties = properties,
         .memory_properties = memory_properties,
         .available_extensions = extensions,

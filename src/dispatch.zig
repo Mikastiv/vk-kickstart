@@ -82,6 +82,7 @@ const default_instance_functions = vk.InstanceCommandFlags{
     .createDebugUtilsMessengerEXT = true,
     .destroyDebugUtilsMessengerEXT = true,
     .destroySurfaceKHR = true,
+    .getPhysicalDeviceFeatures2 = true,
 };
 
 const default_device_functions = vk.DeviceCommandFlags{

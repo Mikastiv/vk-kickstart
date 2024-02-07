@@ -23,7 +23,7 @@ pub fn init(
     const device_info = vk.DeviceCreateInfo{
         .queue_create_info_count = @intCast(queue_create_infos.len),
         .p_queue_create_infos = queue_create_infos.ptr,
-        .p_enabled_features = physical_device.features,
+        .p_enabled_features = &physical_device.features,
         .enabled_extension_count = @intCast(physical_device.extensions.items.len),
         .pp_enabled_extension_names = physical_device.extensions.items.ptr,
     };
@@ -34,13 +34,14 @@ pub fn init(
 
     return .{
         .handle = handle,
-        .physical_device = physical_device,
+        .physical_device = try physical_device.clone(),
         .surface = physical_device.surface,
         .allocation_callbacks = allocation_callbacks,
     };
 }
 
-pub fn deinit(self: @This()) void {
+pub fn deinit(self: *@This()) void {
+    self.physical_device.deinit();
     vkd().destroyDevice(self.handle, self.allocation_callbacks);
 }
 
