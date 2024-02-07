@@ -67,6 +67,8 @@ pub fn init(
         info.suitable = try isDeviceSuitable(info, surface, config);
     }
 
+    std.sort.insertion(PhysicalDeviceInfo, physical_device_infos.items, config, comparePhysicalDevices);
+
     const selected = physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
 
@@ -234,11 +236,29 @@ fn comparePhysicalDevices(config: Config, a: PhysicalDeviceInfo, b: PhysicalDevi
         return a_is_prefered_type;
     }
 
+    const local_memory_a = getLocalMemorySize(a.memory_properties);
+    const local_memory_b = getLocalMemorySize(b.memory_properties);
+    if (local_memory_a != local_memory_b) {
+        return local_memory_a >= local_memory_b;
+    }
+
     if (a.properties.api_version != b.properties.api_version) {
         return a.properties.api_version >= b.properties.api_version;
     }
 
-    // TODO: more checks
+    return true;
+}
+
+fn getLocalMemorySize(memory_properties: vk.PhysicalDeviceMemoryProperties) vk.DeviceSize {
+    var size: vk.DeviceSize = 0;
+    const heap_count = memory_properties.memory_heap_count;
+    for (memory_properties.memory_heaps[0..heap_count]) |heap| {
+        if (heap.flags.device_local_bit) {
+            size = @max(size, heap.size);
+        }
+    }
+
+    return size;
 }
 
 fn isDeviceSuitable(
