@@ -149,8 +149,8 @@ const PhysicalDeviceInfo = struct {
 };
 
 fn setExtension(addr: *[vk.MAX_EXTENSION_NAME_SIZE]u8, ext: [*:0]const u8) void {
-    const len = std.mem.len(ext);
-    @memcpy(addr, ext[0 .. len + 1].ptr);
+    const len = std.mem.len(ext) + 1;
+    @memcpy(addr[0..len], ext[0..len]);
 }
 
 fn getPresentQueue(
