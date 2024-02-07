@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
         .registry = @as([]const u8, b.pathFromRoot("vk.xml")),
     });
 
-    const kickstart = b.addModule("vk_kickstart", .{
+    const kickstart = b.addModule("vk-kickstart", .{
         .root_source_file = .{ .path = "src/vk_kickstart.zig" },
         .imports = &.{
             .{ .name = "vulkan", .module = vkzig_dep.module("vulkan-zig") },

@@ -87,4 +87,5 @@ const default_instance_functions = vk.InstanceCommandFlags{
 
 const default_device_functions = vk.DeviceCommandFlags{
     .destroyDevice = true,
+    .getDeviceQueue = true,
 };
