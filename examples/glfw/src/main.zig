@@ -42,8 +42,16 @@ pub fn main() !void {
 
     const physical_device = try vkk.PhysicalDevice.select(allocator, &instance, surface, .{
         .transfer_queue = .dedicated,
+        .required_extensions = &.{
+            "VK_KHR_acceleration_structure",
+            "VK_KHR_deferred_host_operations",
+            "VK_KHR_ray_tracing_pipeline",
+        },
         .required_features = .{
             .sampler_anisotropy = vk.TRUE,
+        },
+        .required_features_12 = .{
+            .descriptor_indexing = vk.TRUE,
         },
         .required_features_13 = .{
             .dynamic_rendering = vk.TRUE,

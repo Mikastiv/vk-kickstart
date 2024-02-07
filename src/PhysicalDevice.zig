@@ -32,7 +32,7 @@ pub const QueuePreference = enum {
 
 pub const Config = struct {
     name: ?[*:0]const u8 = null,
-    required_api_version: u32 = vk.API_VERSION_1_0,
+    required_api_version: u32 = vk.API_VERSION_1_1,
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
     transfer_queue: QueuePreference = .none,
     compute_queue: QueuePreference = .none,
@@ -120,11 +120,12 @@ pub fn name(self: *const @This()) []const u8 {
     return mem.span(str);
 }
 
-pub fn extensions(self: *const @This()) []const [*:0]const u8 {
-    const slice = self.extensions_array[0..self.extension_count];
-    const ptr_int: usize = @intFromPtr(&slice);
-    const ptr: *[]const [*:0]const u8 = @ptrFromInt(ptr_int);
-    return ptr.*;
+pub fn extensions(self: *const @This(), allocator: mem.Allocator) ![][*:0]const u8 {
+    const slice = try allocator.alloc([*:0]const u8, self.extension_count);
+    for (slice, 0..) |*ptr, i| {
+        ptr.* = @ptrCast(&self.extensions_array[i]);
+    }
+    return slice;
 }
 
 const PhysicalDeviceInfo = struct {
@@ -149,7 +150,7 @@ const PhysicalDeviceInfo = struct {
 
 fn setExtension(addr: *[vk.MAX_EXTENSION_NAME_SIZE]u8, ext: [*:0]const u8) void {
     const len = std.mem.len(ext);
-    @memcpy(addr, ext[0 .. len + 1]);
+    @memcpy(addr, ext[0 .. len + 1].ptr);
 }
 
 fn getPresentQueue(
@@ -467,7 +468,7 @@ fn fetchPhysicalDeviceInfo(
     allocator: mem.Allocator,
     handle: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
-    instance_version: u32,
+    api_version: u32,
 ) !PhysicalDeviceInfo {
     const properties = vki().getPhysicalDeviceProperties(handle);
     const memory_properties = vki().getPhysicalDeviceMemoryProperties(handle);
@@ -478,9 +479,9 @@ fn fetchPhysicalDeviceInfo(
     var features_13 = vk.PhysicalDeviceVulkan13Features{};
 
     features.p_next = &features_11;
-    if (instance_version >= vk.API_VERSION_1_2)
+    if (api_version >= vk.API_VERSION_1_2)
         features_11.p_next = &features_12;
-    if (instance_version >= vk.API_VERSION_1_3)
+    if (api_version >= vk.API_VERSION_1_3)
         features_12.p_next = &features_13;
 
     vki().getPhysicalDeviceFeatures2(handle, &features);

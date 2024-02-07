@@ -24,11 +24,12 @@ pub fn create(
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
-    const physical_device_ext = physical_device.extensions();
+    const physical_device_exts = try physical_device.extensions(allocator);
+    defer allocator.free(physical_device_exts);
     var enabled_extensions = std.ArrayList([*:0]const u8).init(allocator);
     defer enabled_extensions.deinit();
 
-    try enabled_extensions.appendSlice(physical_device_ext);
+    try enabled_extensions.appendSlice(physical_device_exts);
     try enabled_extensions.append(vk.extension_info.khr_swapchain.name);
 
     var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };
