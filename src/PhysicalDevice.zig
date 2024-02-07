@@ -30,7 +30,7 @@ pub const QueuePreference = enum {
     separate,
 };
 
-pub const Config = struct {
+pub const Options = struct {
     name: ?[*:0]const u8 = null,
     required_api_version: u32 = vk.API_VERSION_1_1,
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
@@ -48,7 +48,7 @@ pub fn select(
     allocator: mem.Allocator,
     instance: *const Instance,
     surface: vk.SurfaceKHR,
-    config: Config,
+    options: Options,
 ) !@This() {
     const physical_device_handles = try getPhysicalDevices(allocator, instance.handle);
     defer allocator.free(physical_device_handles);
@@ -67,10 +67,10 @@ pub fn select(
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitable = try isDeviceSuitable(info, surface, config);
+        info.suitable = try isDeviceSuitable(info, surface, options);
     }
 
-    std.sort.insertion(PhysicalDeviceInfo, physical_device_infos.items, config, comparePhysicalDevices);
+    std.sort.insertion(PhysicalDeviceInfo, physical_device_infos.items, options, comparePhysicalDevices);
 
     const selected = physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
@@ -78,7 +78,7 @@ pub fn select(
     var extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8 = undefined;
     var extension_count: usize = 0;
 
-    for (config.required_extensions) |ext| {
+    for (options.required_extensions) |ext| {
         setExtension(&extensions_array[extension_count], ext);
         extension_count += 1;
     }
@@ -92,22 +92,22 @@ pub fn select(
         .instance_version = instance.api_version,
         .handle = selected.handle,
         .surface = surface,
-        .features = config.required_features,
-        .features_11 = config.required_features_11,
-        .features_12 = config.required_features_12,
-        .features_13 = config.required_features_13,
+        .features = options.required_features,
+        .features_11 = options.required_features_11,
+        .features_12 = options.required_features_12,
+        .features_13 = options.required_features_13,
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
         .extensions_array = extensions_array,
         .extension_count = extension_count,
         .graphics_family = selected.graphics_family.?,
         .present_family = selected.present_family.?,
-        .transfer_family = switch (config.transfer_queue) {
+        .transfer_family = switch (options.transfer_queue) {
             .none => null,
             .dedicated => selected.dedicated_transfer_family,
             .separate => selected.separate_transfer_family,
         },
-        .compute_family = switch (config.compute_queue) {
+        .compute_family = switch (options.compute_queue) {
             .none => null,
             .dedicated => selected.dedicated_compute_family,
             .separate => selected.separate_compute_family,
@@ -210,13 +210,13 @@ fn getQueueNoGraphics(
     return index;
 }
 
-fn comparePhysicalDevices(config: Config, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
+fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
     if (a.suitable != b.suitable) {
         return a.suitable;
     }
 
-    const a_is_prefered_type = a.properties.device_type == config.preferred_type;
-    const b_is_prefered_type = b.properties.device_type == config.preferred_type;
+    const a_is_prefered_type = a.properties.device_type == options.preferred_type;
+    const b_is_prefered_type = b.properties.device_type == options.preferred_type;
     if (a_is_prefered_type != b_is_prefered_type) {
         return a_is_prefered_type;
     }
@@ -249,26 +249,26 @@ fn getLocalMemorySize(memory_properties: vk.PhysicalDeviceMemoryProperties) vk.D
 fn isDeviceSuitable(
     device: *const PhysicalDeviceInfo,
     surface: vk.SurfaceKHR,
-    config: Config,
+    options: Options,
 ) !bool {
-    if (config.name) |n| {
+    if (options.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
         if (mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
-    if (device.properties.api_version < config.required_api_version) return false;
+    if (device.properties.api_version < options.required_api_version) return false;
 
-    if (config.transfer_queue == .dedicated and device.dedicated_transfer_family == null) return false;
-    if (config.transfer_queue == .separate and device.separate_transfer_family == null) return false;
-    if (config.compute_queue == .dedicated and device.dedicated_compute_family == null) return false;
-    if (config.compute_queue == .separate and device.separate_compute_family == null) return false;
+    if (options.transfer_queue == .dedicated and device.dedicated_transfer_family == null) return false;
+    if (options.transfer_queue == .separate and device.separate_transfer_family == null) return false;
+    if (options.compute_queue == .dedicated and device.dedicated_compute_family == null) return false;
+    if (options.compute_queue == .separate and device.separate_compute_family == null) return false;
 
-    if (!supportsRequiredFeatures(device.features, config.required_features)) return false;
-    if (!supportsRequiredFeatures11(device.features_11, config.required_features_11)) return false;
-    if (!supportsRequiredFeatures12(device.features_12, config.required_features_12)) return false;
-    if (!supportsRequiredFeatures13(device.features_13, config.required_features_13)) return false;
+    if (!supportsRequiredFeatures(device.features, options.required_features)) return false;
+    if (!supportsRequiredFeatures11(device.features_11, options.required_features_11)) return false;
+    if (!supportsRequiredFeatures12(device.features_12, options.required_features_12)) return false;
+    if (!supportsRequiredFeatures13(device.features_13, options.required_features_13)) return false;
 
-    for (config.required_extensions) |ext| {
+    for (options.required_extensions) |ext| {
         if (!isExtensionAvailable(device.available_extensions, ext)) {
             return false;
         }
@@ -284,7 +284,7 @@ fn isDeviceSuitable(
 
     const heap_count = device.memory_properties.memory_heap_count;
     for (device.memory_properties.memory_heaps[0..heap_count]) |heap| {
-        if (heap.flags.device_local_bit and heap.size >= config.required_mem_size) {
+        if (heap.flags.device_local_bit and heap.size >= options.required_mem_size) {
             break;
         }
     } else {
