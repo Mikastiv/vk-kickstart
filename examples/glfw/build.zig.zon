@@ -7,8 +7,7 @@
             .hash = "122091debcee20ff2aaf983a9e8c215d4e50cc6caf44975442218901ea728e7dd79a",
         },
         .vk_kickstart = .{
-            .url = "https://github.com/Mikastiv/vk-kickstart/archive/5918f95d87499e50f4a49ed1735a556b0106e581.tar.gz",
-            .hash = "12205114f652612031ebeeec0e73fd3f7d08128fbb34e173842ef007afd52478cb5e",
+            .path = "../../",
         },
     },
     .paths = .{

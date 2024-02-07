@@ -46,7 +46,7 @@ pub const Config = struct {
     debug_message_type: DebugMessageType = default_message_type,
 };
 
-pub fn init(allocator: mem.Allocator, loader: anytype, config: Config) !@This() {
+pub fn create(allocator: mem.Allocator, loader: anytype, config: Config) !@This() {
     try dispatch.initBaseDispatch(loader);
 
     const api_version = try getAppropriateApiVersion(config.required_api_version);
@@ -111,7 +111,7 @@ pub fn init(allocator: mem.Allocator, loader: anytype, config: Config) !@This() 
     };
 }
 
-pub fn deinit(self: @This()) void {
+pub fn destroy(self: *const @This()) void {
     destroyDebugMessenger(self.handle, self.debug_messenger, self.allocation_callbacks);
     vki().destroyInstance(self.handle, self.allocation_callbacks);
 }

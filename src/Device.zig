@@ -16,7 +16,7 @@ present_queue: vk.Queue,
 transfer_queue: ?vk.Queue,
 compute_queue: ?vk.Queue,
 
-pub fn init(
+pub fn create(
     allocator: mem.Allocator,
     physical_device: *const PhysicalDevice,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
@@ -24,12 +24,30 @@ pub fn init(
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
+    const physical_device_ext = physical_device.extensions();
+    var enabled_extensions = std.ArrayList([*:0]const u8).init(allocator);
+    defer enabled_extensions.deinit();
+
+    try enabled_extensions.appendSlice(physical_device_ext);
+    try enabled_extensions.append(vk.extension_info.khr_swapchain.name);
+
+    var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };
+    var features_11 = physical_device.features_11;
+    var features_12 = physical_device.features_12;
+    var features_13 = physical_device.features_13;
+
+    features.p_next = &features_11;
+    if (physical_device.instance_version >= vk.API_VERSION_1_2)
+        features_11.p_next = &features_12;
+    if (physical_device.instance_version >= vk.API_VERSION_1_3)
+        features_12.p_next = &features_13;
+
     const device_info = vk.DeviceCreateInfo{
         .queue_create_info_count = @intCast(queue_create_infos.len),
         .p_queue_create_infos = queue_create_infos.ptr,
-        .p_enabled_features = &physical_device.features,
-        .enabled_extension_count = @intCast(physical_device.extensions.items.len),
-        .pp_enabled_extension_names = physical_device.extensions.items.ptr,
+        .enabled_extension_count = @intCast(enabled_extensions.items.len),
+        .pp_enabled_extension_names = enabled_extensions.items.ptr,
+        .p_next = &features,
     };
 
     const handle = try vki().createDevice(physical_device.handle, &device_info, allocation_callbacks);
@@ -43,7 +61,7 @@ pub fn init(
 
     return .{
         .handle = handle,
-        .physical_device = try physical_device.clone(),
+        .physical_device = physical_device.*,
         .surface = physical_device.surface,
         .allocation_callbacks = allocation_callbacks,
         .graphics_queue = graphics_queue,
@@ -53,8 +71,7 @@ pub fn init(
     };
 }
 
-pub fn deinit(self: *@This()) void {
-    self.physical_device.deinit();
+pub fn destroy(self: *const @This()) void {
     vkd().destroyDevice(self.handle, self.allocation_callbacks);
 }
 

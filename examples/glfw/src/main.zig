@@ -32,15 +32,15 @@ pub fn main() !void {
     const window = try Window.init(allocator, 800, 600, "vk-kickstart");
     defer window.deinit(allocator);
 
-    const instance = try vkk.Instance.init(allocator, c.glfwGetInstanceProcAddress, .{
+    const instance = try vkk.Instance.create(allocator, c.glfwGetInstanceProcAddress, .{
         .required_api_version = vk.API_VERSION_1_3,
     });
-    defer instance.deinit();
+    defer instance.destroy();
 
     const surface = try window.createSurface(instance.handle);
     defer vki().destroySurfaceKHR(instance.handle, surface, instance.allocation_callbacks);
 
-    var physical_device = try vkk.PhysicalDevice.init(allocator, &instance, surface, .{
+    const physical_device = try vkk.PhysicalDevice.select(allocator, &instance, surface, .{
         .transfer_queue = .dedicated,
         .required_features = .{
             .sampler_anisotropy = vk.TRUE,
@@ -50,12 +50,11 @@ pub fn main() !void {
             .synchronization_2 = vk.TRUE,
         },
     });
-    defer physical_device.deinit();
 
     std.log.info("selected {s}", .{physical_device.name()});
 
-    var device = try vkk.Device.init(allocator, &physical_device, null);
-    defer device.deinit();
+    const device = try vkk.Device.create(allocator, &physical_device, null);
+    defer device.destroy();
 
     const queue = device.graphics_queue;
     _ = queue;

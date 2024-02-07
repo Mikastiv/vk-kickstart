@@ -6,7 +6,9 @@ const mem = std.mem;
 
 const vki = dispatch.vki;
 
-// TODO: properties 11,12,13
+pub const max_extensions = 32;
+
+instance_version: u32,
 handle: vk.PhysicalDevice,
 surface: vk.SurfaceKHR,
 properties: vk.PhysicalDeviceProperties,
@@ -15,7 +17,8 @@ features: vk.PhysicalDeviceFeatures,
 features_11: vk.PhysicalDeviceVulkan11Features,
 features_12: vk.PhysicalDeviceVulkan12Features,
 features_13: vk.PhysicalDeviceVulkan13Features,
-extensions: std.ArrayList([*:0]const u8),
+extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8,
+extension_count: usize,
 graphics_family: u32,
 present_family: u32,
 transfer_family: ?u32,
@@ -41,7 +44,7 @@ pub const Config = struct {
     required_extensions: []const [*:0]const u8 = &.{},
 };
 
-pub fn init(
+pub fn select(
     allocator: mem.Allocator,
     instance: *const Instance,
     surface: vk.SurfaceKHR,
@@ -72,26 +75,21 @@ pub fn init(
     const selected = physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
 
-    var extensions = std.ArrayList([*:0]const u8).init(allocator);
-    errdefer {
-        for (extensions.items) |ext| {
-            const span = std.mem.span(ext);
-            allocator.free(span);
-        }
-        extensions.deinit();
-    }
+    var extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8 = undefined;
+    var extension_count: usize = 0;
 
     for (config.required_extensions) |ext| {
-        try appendExtension(&extensions, ext);
+        setExtension(&extensions_array[extension_count], ext);
+        extension_count += 1;
     }
 
     if (selected.portability_ext_available) {
-        try appendExtension(&extensions, vk.extension_info.khr_portability_subset.name);
+        setExtension(&extensions_array[extension_count], vk.extension_info.khr_portability_subset.name);
+        extension_count += 1;
     }
 
-    try appendExtension(&extensions, vk.extension_info.khr_swapchain.name);
-
     return .{
+        .instance_version = instance.api_version,
         .handle = selected.handle,
         .surface = surface,
         .features = config.required_features,
@@ -100,7 +98,8 @@ pub fn init(
         .features_13 = config.required_features_13,
         .properties = selected.properties,
         .memory_properties = selected.memory_properties,
-        .extensions = extensions,
+        .extensions_array = extensions_array,
+        .extension_count = extension_count,
         .graphics_family = selected.graphics_family.?,
         .present_family = selected.present_family.?,
         .transfer_family = switch (config.transfer_queue) {
@@ -116,30 +115,16 @@ pub fn init(
     };
 }
 
-pub fn deinit(self: *@This()) void {
-    for (self.extensions.items) |ext| {
-        const span = std.mem.span(ext);
-        self.extensions.allocator.free(span);
-    }
-    self.extensions.deinit();
-}
-
 pub fn name(self: *const @This()) []const u8 {
     const str: [*:0]const u8 = @ptrCast(&self.properties.device_name);
     return mem.span(str);
 }
 
-pub fn clone(self: *const @This()) !@This() {
-    const exts_copy = try self.extensions.clone();
-    for (exts_copy.items) |*ext| {
-        const span = std.mem.span(ext.*);
-        ext.* = try self.extensions.allocator.dupeZ(u8, span);
-    }
-
-    var copy = self.*;
-    copy.extensions = exts_copy;
-
-    return copy;
+pub fn extensions(self: *const @This()) []const [*:0]const u8 {
+    const slice = self.extensions_array[0..self.extension_count];
+    const ptr_int: usize = @intFromPtr(&slice);
+    const ptr: *[]const [*:0]const u8 = @ptrFromInt(ptr_int);
+    return ptr.*;
 }
 
 const PhysicalDeviceInfo = struct {
@@ -162,10 +147,9 @@ const PhysicalDeviceInfo = struct {
     suitable: bool = true,
 };
 
-fn appendExtension(extensions: *std.ArrayList([*:0]const u8), new: [*:0]const u8) !void {
-    const span = std.mem.span(new);
-    const copy = try extensions.allocator.dupeZ(u8, span);
-    try extensions.append(copy);
+fn setExtension(addr: *[vk.MAX_EXTENSION_NAME_SIZE]u8, ext: [*:0]const u8) void {
+    const len = std.mem.len(ext);
+    @memcpy(addr, ext[0 .. len + 1]);
 }
 
 fn getPresentQueue(
@@ -488,31 +472,28 @@ fn fetchPhysicalDeviceInfo(
     const properties = vki().getPhysicalDeviceProperties(handle);
     const memory_properties = vki().getPhysicalDeviceMemoryProperties(handle);
 
-    var features = vk.PhysicalDeviceFeatures{};
+    var features = vk.PhysicalDeviceFeatures2{ .features = .{} };
     var features_11 = vk.PhysicalDeviceVulkan11Features{};
     var features_12 = vk.PhysicalDeviceVulkan12Features{};
     var features_13 = vk.PhysicalDeviceVulkan13Features{};
 
+    features.p_next = &features_11;
     if (instance_version >= vk.API_VERSION_1_2)
         features_11.p_next = &features_12;
     if (instance_version >= vk.API_VERSION_1_3)
         features_12.p_next = &features_13;
 
-    var features2 = vk.PhysicalDeviceFeatures2{ .features = .{} };
-    features2.p_next = &features_11;
-
-    vki().getPhysicalDeviceFeatures2(handle, &features2);
-    features = features2.features;
+    vki().getPhysicalDeviceFeatures2(handle, &features);
 
     var extension_count: u32 = 0;
     var result = try vki().enumerateDeviceExtensionProperties(handle, null, &extension_count, null);
     if (result != .success) return error.EnumerateDeviceExtensionsFailed;
 
-    const extensions = try allocator.alloc(vk.ExtensionProperties, extension_count);
-    errdefer allocator.free(extensions);
+    const available_extensions = try allocator.alloc(vk.ExtensionProperties, extension_count);
+    errdefer allocator.free(available_extensions);
 
     while (true) {
-        result = try vki().enumerateDeviceExtensionProperties(handle, null, &extension_count, extensions.ptr);
+        result = try vki().enumerateDeviceExtensionProperties(handle, null, &extension_count, available_extensions.ptr);
         if (result == .success) break;
     }
 
@@ -549,13 +530,13 @@ fn fetchPhysicalDeviceInfo(
 
     return .{
         .handle = handle,
-        .features = features,
+        .features = features.features,
         .features_11 = features_11,
         .features_12 = features_12,
         .features_13 = features_13,
         .properties = properties,
         .memory_properties = memory_properties,
-        .available_extensions = extensions,
+        .available_extensions = available_extensions,
         .queue_families = queue_families,
         .graphics_family = graphics_family,
         .present_family = present_family,
@@ -563,7 +544,7 @@ fn fetchPhysicalDeviceInfo(
         .dedicated_compute_family = dedicated_compute,
         .separate_transfer_family = separate_transfer,
         .separate_compute_family = separate_compute,
-        .portability_ext_available = isExtensionAvailable(extensions, vk.extension_info.khr_portability_subset.name),
+        .portability_ext_available = isExtensionAvailable(available_extensions, vk.extension_info.khr_portability_subset.name),
     };
 }
 
