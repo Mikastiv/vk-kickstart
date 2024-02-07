@@ -11,6 +11,37 @@ This library helps with:
 - Enabling physical device extensions
 - Device creation
 
+### Setting up
+
+Add vk-kickstart as a dependency to your build.zig.zon:
+```
+.vk_kickstart = .{
+    .url = "https://github.com/Mikastiv/vk-kickstart/archive/<LATEST_COMMIT>.tar.gz",
+    .hash = "<COMMIT_HASH>",
+},
+```
+
+Then update your build file with the following:
+```zig
+const kickstart_dep = b.dependency("vk_kickstart", .{});
+exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
+// vk-kickstart uses vulkan-zig under the hood and provides it as module
+exe.root_module.addImport("vulkan", kickstart_dep.module("vulkan-zig"));
+```
+
+You can then import vk-kickstart as a module
+```zig
+const vkk = @import("vk-kickstart");
+
+// Vulkan dispatchers
+const vkb = vkk.vkb; // Base dispatch
+const vki = vkk.vki; // Instance dispatch
+const vkd = vkk.vkd; // Device dispatch
+```
+
+See `examples/*` for examples
+
 ### Todo list
 - Swapchain creation
 - Headless mode
+- Render triangle in glfw example

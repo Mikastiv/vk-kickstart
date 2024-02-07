@@ -5,9 +5,12 @@ const vkk = @import("vk-kickstart");
 const dispatch = @import("dispatch.zig");
 const Window = @import("Window.zig");
 
-const vki = vkk.vki;
+// Vulkan dispatchers
+const vkb = vkk.vkb; // Base dispatch
+const vki = vkk.vki; // Instance dispatch
+const vkd = vkk.vkd; // Device dispatch
 
-// can override default_functions
+// can override default_functions if more Vulkan functions are required
 // pub const instance_functions = dispatch.instance;
 // pub const device_functions = dispatch.device;
 
@@ -26,10 +29,12 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    const window = try Window.init(allocator, 800, 600, "VkKickstart");
+    const window = try Window.init(allocator, 800, 600, "vk-kickstart");
     defer window.deinit(allocator);
 
-    const instance = try vkk.Instance.init(allocator, c.glfwGetInstanceProcAddress, .{});
+    const instance = try vkk.Instance.init(allocator, c.glfwGetInstanceProcAddress, .{
+        .required_api_version = vk.API_VERSION_1_3,
+    });
     defer instance.deinit();
 
     const surface = try window.createSurface(instance.handle);
@@ -37,12 +42,12 @@ pub fn main() !void {
 
     var physical_device = try vkk.PhysicalDevice.init(allocator, &instance, surface, .{
         .transfer_queue = .dedicated,
-        .compute_queue = .separate,
         .required_features = .{
-            .wide_lines = vk.TRUE,
+            .sampler_anisotropy = vk.TRUE,
         },
         .required_features_13 = .{
-            .private_data = vk.TRUE,
+            .dynamic_rendering = vk.TRUE,
+            .synchronization_2 = vk.TRUE,
         },
     });
     defer physical_device.deinit();
@@ -51,4 +56,11 @@ pub fn main() !void {
 
     var device = try vkk.Device.init(allocator, &physical_device, null);
     defer device.deinit();
+
+    const queue = device.graphics_queue;
+    _ = queue;
+
+    while (!window.shouldClose()) {
+        c.glfwPollEvents();
+    }
 }
