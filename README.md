@@ -21,7 +21,10 @@ zig fetch --save https://github.com/Mikastiv/vk-kickstart/archive/<COMMIT_HASH>.
 
 Then update your build file with the following:
 ```zig
-const kickstart_dep = b.dependency("vk_kickstart", .{});
+const kickstart_dep = b.dependency("vk_kickstart", .{
+  // .enable_validation = true, // enable validation layers and creates a debug messenger (default: true if .Debug else false)
+  // .verbose = true, // enable debug output (default: false)
+});
 exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
 // vk-kickstart uses vulkan-zig under the hood and provides it as module
 exe.root_module.addImport("vulkan", kickstart_dep.module("vulkan-zig"));
@@ -31,10 +34,6 @@ You can then import vk-kickstart as a module
 ```zig
 const vkk = @import("vk-kickstart");
 ```
-
-Two build options are available: 
-- `enable_validation`: enable validation layers and creates a debug messenger (default: true if .Debug else false)
-- `verbose`: enable debug output (default: false)
 
 See [build.zig](examples/glfw/build.zig) for an example
 
