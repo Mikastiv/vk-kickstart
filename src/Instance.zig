@@ -32,17 +32,28 @@ debug_messenger: DebugMessenger,
 api_version: u32,
 
 pub const Config = struct {
+    /// Application name
     app_name: [*:0]const u8 = "",
+    /// Application version
     app_version: u32 = 0,
+    /// Engine name
     engine_name: [*:0]const u8 = "",
+    /// Engine version
     engine_version: u32 = 0,
+    /// Required Vulkan version (minimum 1.1)
     required_api_version: u32 = vk.API_VERSION_1_1,
-    extensions: []const [*:0]const u8 = &.{},
-    layers: []const [*:0]const u8 = &.{},
-    headless: bool = false,
+    /// Array of required extensions to enable
+    /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled
+    required_extensions: []const [*:0]const u8 = &.{},
+    /// Array of required layers to enable
+    required_layers: []const [*:0]const u8 = &.{},
+    /// Vulkan allocation callbacks
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
+    /// Custom debug callback function (or use default)
     debug_callback: DebugCallback = default_debug_callback,
+    /// Debug message severity filter
     debug_message_severity: DebugMessageSeverity = default_message_severity,
+    /// Debug message type filter
     debug_message_type: DebugMessageType = default_message_type,
 };
 
@@ -66,19 +77,19 @@ pub fn create(allocator: mem.Allocator, loader: anytype, config: Config) !@This(
     const available_layers = try getAvailableLayers(allocator);
     defer allocator.free(available_layers);
 
-    var extensions = try getRequiredExtensions(allocator, config, available_extensions);
-    defer extensions.deinit();
+    var required_extensions = try getRequiredExtensions(allocator, config.required_extensions, available_extensions);
+    defer required_extensions.deinit();
 
     const portability_enumeration_support = isExtensionAvailable(
         available_extensions,
         vk.extension_info.khr_portability_enumeration.name,
     );
     if (portability_enumeration_support) {
-        try extensions.append(vk.extension_info.khr_portability_enumeration.name);
+        try required_extensions.append(vk.extension_info.khr_portability_enumeration.name);
     }
 
-    var layers = try getRequiredLayers(allocator, config, available_layers);
-    defer layers.deinit();
+    var required_layers = try getRequiredLayers(allocator, config.required_layers, available_layers);
+    defer required_layers.deinit();
 
     const next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
         .message_severity = config.debug_message_severity,
@@ -89,10 +100,10 @@ pub fn create(allocator: mem.Allocator, loader: anytype, config: Config) !@This(
     const instance_info = vk.InstanceCreateInfo{
         .flags = if (portability_enumeration_support) .{ .enumerate_portability_bit_khr = true } else .{},
         .p_application_info = &app_info,
-        .enabled_extension_count = @as(u32, @intCast(extensions.items.len)),
-        .pp_enabled_extension_names = extensions.items.ptr,
-        .enabled_layer_count = @as(u32, @intCast(layers.items.len)),
-        .pp_enabled_layer_names = layers.items.ptr,
+        .enabled_extension_count = @as(u32, @intCast(required_extensions.items.len)),
+        .pp_enabled_extension_names = required_extensions.items.ptr,
+        .enabled_layer_count = @as(u32, @intCast(required_layers.items.len)),
+        .pp_enabled_layer_names = required_layers.items.ptr,
         .p_next = next,
     };
 
@@ -187,41 +198,39 @@ fn addExtension(
 
 fn getRequiredExtensions(
     allocator: mem.Allocator,
-    config: Config,
+    config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
 ) !std.ArrayList([*:0]const u8) {
     var extensions = std.ArrayList([*:0]const u8).init(allocator);
     errdefer extensions.deinit();
 
-    for (config.extensions) |ext| {
+    for (config_extensions) |ext| {
         if (!try addExtension(&extensions, available_extensions, ext)) {
             return error.RequestedExtensionNotAvailable;
         }
     }
 
-    if (!config.headless) {
-        if (!try addExtension(&extensions, available_extensions, vk.extension_info.khr_surface.name)) {
-            return error.SurfaceExtensionNotAvailable;
-        }
-
-        const windowing_extensions: []const [*:0]const u8 = switch (builtin.os.tag) {
-            .windows => &.{vk.extension_info.khr_win_32_surface.name},
-            .macos => &.{vk.extension_info.ext_metal_surface.name},
-            .linux => &.{
-                vk.extension_info.khr_xlib_surface,
-                vk.extension_info.khr_xcb_surface,
-                vk.extension_info.khr_wayland_surface,
-            },
-            else => @compileError("unsupported platform"),
-        };
-
-        var added_one = false;
-        for (windowing_extensions) |ext| {
-            added_one = try addExtension(&extensions, available_extensions, ext) or added_one;
-        }
-
-        if (!added_one) return error.WindowingExtensionNotAvailable;
+    if (!try addExtension(&extensions, available_extensions, vk.extension_info.khr_surface.name)) {
+        return error.SurfaceExtensionNotAvailable;
     }
+
+    const windowing_extensions: []const [*:0]const u8 = switch (builtin.os.tag) {
+        .windows => &.{vk.extension_info.khr_win_32_surface.name},
+        .macos => &.{vk.extension_info.ext_metal_surface.name},
+        .linux => &.{
+            vk.extension_info.khr_xlib_surface,
+            vk.extension_info.khr_xcb_surface,
+            vk.extension_info.khr_wayland_surface,
+        },
+        else => @compileError("unsupported platform"),
+    };
+
+    var added_one = false;
+    for (windowing_extensions) |ext| {
+        added_one = try addExtension(&extensions, available_extensions, ext) or added_one;
+    }
+
+    if (!added_one) return error.WindowingExtensionNotAvailable;
 
     if (build_options.enable_validation) {
         if (!try addExtension(&extensions, available_extensions, vk.extension_info.ext_debug_utils.name)) {
@@ -259,13 +268,13 @@ fn addLayer(
 
 fn getRequiredLayers(
     allocator: mem.Allocator,
-    config: Config,
+    config_layers: []const [*:0]const u8,
     available_layers: []const vk.LayerProperties,
 ) !std.ArrayList([*:0]const u8) {
     var layers = std.ArrayList([*:0]const u8).init(allocator);
     errdefer layers.deinit();
 
-    for (config.layers) |layer| {
+    for (config_layers) |layer| {
         if (!try addLayer(&layers, available_layers, layer)) {
             return error.RequestedLayerNotAvailable;
         }

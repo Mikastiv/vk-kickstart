@@ -19,23 +19,39 @@ present_mode: vk.PresentModeKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 
 pub const Options = struct {
+    /// Desired size (in pixels) of the swapchain image(s)
+    /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
+    /// Swapchain create flags
     create_flags: vk.SwapchainCreateFlagsKHR = .{},
+    /// Desired minimum number of presentable images that the application needs
+    /// If left on default, will try to use the minimum of the device + 1
+    /// This value will be clamped between the device's minimum and maximum (if there is a max)
     desired_min_image_count: ?u32 = null,
+    /// Array of desired image formats, in order of priority
+    /// Will fallback to the first found if none match
     desired_formats: []const vk.SurfaceFormatKHR = &.{
-        // In order of priority
         .{ .format = .b8g8r8a8_srgb, .color_space = .srgb_nonlinear_khr },
     },
+    /// Array of desired present modes, in order of priority
+    /// Will fallback to fifo_khr is none match
     desired_present_modes: []const vk.PresentModeKHR = &.{
-        // In order of priority
         .mailbox_khr,
     },
+    /// Desired number of views in a multiview/stereo surface
+    /// Will be clamped down if higher than device's max
     desired_array_layer_count: u32 = 1,
+    /// Intended usage of the (acquired) swapchain images
     image_usage_flags: vk.ImageUsageFlags = .{ .color_attachment_bit = true },
+    /// Value describing the transform, relative to the presentation engine’s natural orientation, applied to the image content prior to presentation
     pre_transform: ?vk.SurfaceTransformFlagsKHR = null,
+    /// Value indicating the alpha compositing mode to use when this surface is composited together with other surfaces on certain window systems
     composite_alpha: vk.CompositeAlphaFlagsKHR = .{ .opaque_bit_khr = true },
+    /// Discard rendering operation that are not visible
     clipped: vk.Bool32 = vk.TRUE,
+    /// Existing non-retired swapchain currently associated with surface
     old_swapchain: ?vk.SwapchainKHR = null,
+    /// Vulkan allocation callbacks
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
 };
 

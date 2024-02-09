@@ -23,13 +23,8 @@ pub fn create(
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
-    const physical_device_exts = try physical_device.extensions(allocator);
-    defer allocator.free(physical_device_exts);
-    var enabled_extensions = std.ArrayList([*:0]const u8).init(allocator);
-    defer enabled_extensions.deinit();
-
-    try enabled_extensions.appendSlice(physical_device_exts);
-    try enabled_extensions.append(vk.extension_info.khr_swapchain.name);
+    const enabled_extensions = try physical_device.extensions(allocator);
+    defer allocator.free(enabled_extensions);
 
     var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };
     var features_11 = physical_device.features_11;
@@ -45,8 +40,8 @@ pub fn create(
     const device_info = vk.DeviceCreateInfo{
         .queue_create_info_count = @intCast(queue_create_infos.len),
         .p_queue_create_infos = queue_create_infos.ptr,
-        .enabled_extension_count = @intCast(enabled_extensions.items.len),
-        .pp_enabled_extension_names = enabled_extensions.items.ptr,
+        .enabled_extension_count = @intCast(enabled_extensions.len),
+        .pp_enabled_extension_names = enabled_extensions.ptr,
         .p_next = &features,
     };
 
