@@ -144,12 +144,14 @@ pub fn select(
     };
 }
 
+/// Returns the physical device's name
 pub fn name(self: *const @This()) []const u8 {
     const str: [*:0]const u8 = @ptrCast(&self.properties.device_name);
     return mem.span(str);
 }
 
-pub fn extensions(self: *const @This(), allocator: mem.Allocator) ![][*:0]const u8 {
+/// Returns an array of the extensions required to be enabled when creating the logical device
+pub fn requiredExtensions(self: *const @This(), allocator: mem.Allocator) ![][*:0]const u8 {
     const slice = try allocator.alloc([*:0]const u8, self.extension_count);
     for (slice, 0..) |*ptr, i| {
         ptr.* = @ptrCast(&self.extensions_array[i]);

@@ -23,7 +23,7 @@ pub fn create(
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
-    const enabled_extensions = try physical_device.extensions(allocator);
+    const enabled_extensions = try physical_device.requiredExtensions(allocator);
     defer allocator.free(enabled_extensions);
 
     var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };

@@ -132,6 +132,7 @@ pub fn destroy(self: *const @This()) void {
     vkd().destroySwapchainKHR(self.device, self.handle, self.allocation_callbacks);
 }
 
+/// Returns an array of the swapchain's images
 pub fn getImages(self: *const @This(), allocator: mem.Allocator) ![]vk.Image {
     var image_count: u32 = 0;
     var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
@@ -148,6 +149,7 @@ pub fn getImages(self: *const @This(), allocator: mem.Allocator) ![]vk.Image {
     return images;
 }
 
+/// Returns an array of image views to the images
 pub fn getImageViews(self: *const @This(), allocator: mem.Allocator, images: []const vk.Image) ![]vk.ImageView {
     var image_views = try std.ArrayList(vk.ImageView).initCapacity(allocator, images.len);
     errdefer {
@@ -184,7 +186,8 @@ pub fn getImageViews(self: *const @This(), allocator: mem.Allocator, images: []c
     return image_views.toOwnedSlice();
 }
 
-pub fn destroyImageViews(
+/// Destroys and frees the image views
+pub fn destroyAndFreeImageViews(
     self: *const @This(),
     allocator: mem.Allocator,
     image_views: []const vk.ImageView,

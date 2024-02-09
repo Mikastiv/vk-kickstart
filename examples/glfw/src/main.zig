@@ -80,7 +80,7 @@ pub fn main() !void {
     defer allocator.free(images);
 
     const image_views = try swapchain.getImageViews(allocator, images);
-    defer swapchain.destroyImageViews(allocator, image_views);
+    defer swapchain.destroyAndFreeImageViews(allocator, image_views);
 
     while (!window.shouldClose()) {
         c.glfwPollEvents();
