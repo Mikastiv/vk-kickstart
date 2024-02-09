@@ -29,11 +29,6 @@ exe.root_module.addImport("vulkan", kickstart_dep.module("vulkan-zig"));
 You can then import vk-kickstart as a module
 ```zig
 const vkk = @import("vk-kickstart");
-
-// Vulkan dispatchers
-const vkb = vkk.vkb; // Base dispatch
-const vki = vkk.vki; // Instance dispatch
-const vkd = vkk.vkd; // Device dispatch
 ```
 
 See [build.zig](examples/glfw/build.zig) for an example
@@ -164,6 +159,35 @@ pub const Config = struct {
 ```
 
 Pass these configs and a the logical device to `Swapchain.create()` to create the swapchain
+
+### Vulkan dispatchers
+
+`vk-kickstart` uses [`vulkan-zig`](https://github.com/Snektron/vulkan-zig) and you can access vulkan functions using it's dispatcher api with the functions `vkb()`, `vki()` and `vkd()`
+
+```zig
+const vkk = @import("vk-kickstart");
+const vkb = vkk.vkb; // Base dispatch
+const vki = vkk.vki; // Instance dispatch
+const vkd = vkk.vkd; // Device dispatch
+```
+
+Not all functions are loaded by default, only the ones necessary for `vk-kickstart`. More default functions might be loaded in the future, but for now you will need to overwrite them in the root module, like you would do for std.log.
+
+In your `main.zig`:
+```zig
+pub const base_functions = dispatch.base;
+pub const instance_functions = dispatch.instance;
+pub const device_functions = dispatch.device;
+```
+
+See [dispatch.zig](examples/glfw/src/dispatch.zig) for their definition
+
+You can then use in your code any loaded vulkan functions:
+```zig
+vkd().createRenderPass();
+vkd().cmdDrawIndexed();
+vkd().allocateCommandBuffers();
+```
 
 ## Todo list
 - Headless mode
