@@ -11,7 +11,7 @@ This library helps with:
 - Enabling physical device extensions
 - Device creation
 
-### Setting up
+## Setting up
 
 Add vk-kickstart as a dependency to your build.zig.zon:
 ```
@@ -36,9 +36,134 @@ const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 ```
 
-See `examples/*` for examples
+See [main.zig](examples/glfw/src/main.zig) for an example
 
-### Todo list
+## How to use
+
+### Instance creation
+
+Using the `Instance.Config` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
+
+Note 1: validation layers and the debug messenger are enabled/disabled with a build.zig option: `enable_validation`. They will be enabled by default in debug builds and otherwise disabled. [See build.zig](examples/glfw/build.zig)
+
+Note 2: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
+
+```zig
+pub const Config = struct {
+    /// Application name
+    app_name: [*:0]const u8 = "",
+    /// Application version
+    app_version: u32 = 0,
+    /// Engine name
+    engine_name: [*:0]const u8 = "",
+    /// Engine version
+    engine_version: u32 = 0,
+    /// Required Vulkan version (minimum 1.1)
+    required_api_version: u32 = vk.API_VERSION_1_1,
+    /// Array of required extensions to enable
+    /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled
+    required_extensions: []const [*:0]const u8 = &.{},
+    /// Array of required layers to enable
+    required_layers: []const [*:0]const u8 = &.{},
+    /// Vulkan allocation callbacks
+    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
+    /// Custom debug callback function (or use default)
+    debug_callback: DebugCallback = default_debug_callback,
+    /// Debug message severity filter
+    debug_message_severity: DebugMessageSeverity = default_message_severity,
+    /// Debug message type filter
+    debug_message_type: DebugMessageType = default_message_type,
+};
+```
+
+Pass these configs to `Instance.create()` to create an instance
+
+### Physical device selection
+
+You can set criterias to select an appropriate physical device for your application using `PhysicalDevice.Options`.
+
+Note: VK_KHR_subset (if available) and VK_KHR_swapchain are automatically enabled, no need to add them to the list
+
+```zig
+pub const Options = struct {
+    /// Name of the device to select
+    name: ?[*:0]const u8 = null,
+    /// Required Vulkan version (minimum 1.1)
+    required_api_version: u32 = vk.API_VERSION_1_1,
+    /// Prefered physical device type
+    preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
+    /// Transfer queue preference
+    transfer_queue: QueuePreference = .none,
+    /// Compute queue preference
+    compute_queue: QueuePreference = .none,
+    /// Required local memory size
+    required_mem_size: vk.DeviceSize = 0,
+    /// Required physical device features
+    required_features: vk.PhysicalDeviceFeatures = .{},
+    /// Required physical device feature version 1.1
+    required_features_11: vk.PhysicalDeviceVulkan11Features = .{},
+    /// Required physical device feature version 1.2
+    required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
+    /// Required physical device feature version 1.3
+    required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
+    /// Array of required physical device extensions to enable
+    /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled
+    required_extensions: []const [*:0]const u8 = &.{},
+};
+```
+
+Pass these options and a vk.SurfaceKHR to `PhysicalDevice.select()` to select a device
+
+### Device creation
+
+For this, you only need to call `Device.create()` with the previously selected physical device
+
+### Swapchain creation
+
+Finally to create a swapchain, use `Swapchain.Config`
+
+```zig
+pub const Config = struct {
+    /// Desired size (in pixels) of the swapchain image(s)
+    /// These values will be clamped within the capabilities of the device
+    desired_extent: vk.Extent2D,
+    /// Swapchain create flags
+    create_flags: vk.SwapchainCreateFlagsKHR = .{},
+    /// Desired minimum number of presentable images that the application needs
+    /// If left on default, will try to use the minimum of the device + 1
+    /// This value will be clamped between the device's minimum and maximum (if there is a max)
+    desired_min_image_count: ?u32 = null,
+    /// Array of desired image formats, in order of priority
+    /// Will fallback to the first found if none match
+    desired_formats: []const vk.SurfaceFormatKHR = &.{
+        .{ .format = .b8g8r8a8_srgb, .color_space = .srgb_nonlinear_khr },
+    },
+    /// Array of desired present modes, in order of priority
+    /// Will fallback to fifo_khr is none match
+    desired_present_modes: []const vk.PresentModeKHR = &.{
+        .mailbox_khr,
+    },
+    /// Desired number of views in a multiview/stereo surface
+    /// Will be clamped down if higher than device's max
+    desired_array_layer_count: u32 = 1,
+    /// Intended usage of the (acquired) swapchain images
+    image_usage_flags: vk.ImageUsageFlags = .{ .color_attachment_bit = true },
+    /// Value describing the transform, relative to the presentation engine’s natural orientation, applied to the image content prior to presentation
+    pre_transform: ?vk.SurfaceTransformFlagsKHR = null,
+    /// Value indicating the alpha compositing mode to use when this surface is composited together with other surfaces on certain window systems
+    composite_alpha: vk.CompositeAlphaFlagsKHR = .{ .opaque_bit_khr = true },
+    /// Discard rendering operation that are not visible
+    clipped: vk.Bool32 = vk.TRUE,
+    /// Existing non-retired swapchain currently associated with surface
+    old_swapchain: ?vk.SwapchainKHR = null,
+    /// Vulkan allocation callbacks
+    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
+};
+```
+
+Pass these configs and a the logical device to `Swapchain.create()` to create the swapchain
+
+## Todo list
 - Swapchain creation
 - Headless mode
 - Render triangle in glfw example

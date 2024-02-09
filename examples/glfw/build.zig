@@ -11,7 +11,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const kickstart_dep = b.dependency("vk_kickstart", .{});
+    const kickstart_dep = b.dependency("vk_kickstart", .{
+        // can overwrite the default settings for validation layers and debug callback
+        // .enable_validation = false,
+    });
     exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
     exe.root_module.addImport("vulkan", kickstart_dep.module("vulkan-zig"));
 
