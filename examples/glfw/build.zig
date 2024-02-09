@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
     const kickstart_dep = b.dependency("vk_kickstart", .{
         // can overwrite the default settings for validation layers and debug callback
         // .enable_validation = false, // default: true for .Debug else false
-        .verbose = true, // enable debug output
+        .verbose = true, // enable debug output; it uses std.log.debug so it only print when compiling with .Debug
     });
     exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
     exe.root_module.addImport("vulkan", kickstart_dep.module("vulkan-zig"));

@@ -23,7 +23,7 @@ Then update your build file with the following:
 ```zig
 const kickstart_dep = b.dependency("vk_kickstart", .{
   // .enable_validation = true, // enable validation layers and creates a debug messenger (default: true if .Debug else false)
-  // .verbose = true, // enable debug output (default: false)
+  // .verbose = true, // enable debug output (default: false); it uses std.log.debug so it only print when compiling with .Debug
 });
 exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
 // vk-kickstart uses vulkan-zig under the hood and provides it as module
