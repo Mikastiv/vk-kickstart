@@ -91,4 +91,7 @@ const default_device_functions = vk.DeviceCommandFlags{
     .getDeviceQueue = true,
     .createSwapchainKHR = true,
     .destroySwapchainKHR = true,
+    .getSwapchainImagesKHR = true,
+    .createImageView = true,
+    .destroyImageView = true,
 };

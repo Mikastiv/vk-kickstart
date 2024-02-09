@@ -47,7 +47,7 @@ pub fn create(
 ) !@This() {
     std.debug.assert(surface != .null_handle);
 
-    const surface_support = try fetchSurfaceSupportDetails(allocator, device.physical_device.handle, surface);
+    const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device.handle, surface);
     defer {
         allocator.free(surface_support.formats);
         allocator.free(surface_support.present_modes);
@@ -74,6 +74,8 @@ pub fn create(
     const present_queue_index = device.physical_device.present_family_index;
     const same_index = graphics_queue_index == present_queue_index;
     const queue_family_indices = [_]u32{ graphics_queue_index, present_queue_index };
+
+    // NOTE: lookup p_next extensions
 
     const swapchain_info = vk.SwapchainCreateInfoKHR{
         .flags = options.create_flags,
@@ -112,6 +114,69 @@ pub fn create(
 
 pub fn destroy(self: *const @This()) void {
     vkd().destroySwapchainKHR(self.device, self.handle, self.allocation_callbacks);
+}
+
+pub fn getImages(self: *const @This(), allocator: mem.Allocator) ![]vk.Image {
+    var image_count: u32 = 0;
+    var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
+    if (result != .success) return error.GetSwapchainImagesFailed;
+
+    const images = try allocator.alloc(vk.Image, image_count);
+    errdefer allocator.free(images);
+
+    while (true) {
+        result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, images.ptr);
+        if (result == .success) break;
+    }
+
+    return images;
+}
+
+pub fn getImageViews(self: *const @This(), allocator: mem.Allocator, images: []const vk.Image) ![]vk.ImageView {
+    var image_views = try std.ArrayList(vk.ImageView).initCapacity(allocator, images.len);
+    errdefer {
+        for (image_views.items) |view| {
+            vkd().destroyImageView(self.device, view, self.allocation_callbacks);
+        }
+        image_views.deinit();
+    }
+
+    for (images) |image| {
+        const image_view_info = vk.ImageViewCreateInfo{
+            .image = image,
+            .view_type = .@"2d",
+            .format = self.image_format,
+            .components = .{
+                .r = .identity,
+                .g = .identity,
+                .b = .identity,
+                .a = .identity,
+            },
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        };
+
+        const view = try vkd().createImageView(self.device, &image_view_info, self.allocation_callbacks);
+        try image_views.append(view);
+    }
+
+    return image_views.toOwnedSlice();
+}
+
+pub fn destroyImageViews(
+    self: *const @This(),
+    allocator: mem.Allocator,
+    image_views: []const vk.ImageView,
+) void {
+    for (image_views) |view| {
+        vkd().destroyImageView(self.device, view, self.allocation_callbacks);
+    }
+    allocator.free(image_views);
 }
 
 fn isSharedPresentMode(present_mode: vk.PresentModeKHR) bool {
@@ -197,7 +262,7 @@ const SurfaceSupportDetails = struct {
     present_modes: []const vk.PresentModeKHR,
 };
 
-fn fetchSurfaceSupportDetails(
+fn getSurfaceSupportDetails(
     allocator: mem.Allocator,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
@@ -206,7 +271,7 @@ fn fetchSurfaceSupportDetails(
 
     var format_count: u32 = 0;
     var result = try vki().getPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, null);
-    if (result != .success) return error.EnumeratePhysicalDeviceFormatsFailed;
+    if (result != .success) return error.GetPhysicalDeviceFormatsFailed;
 
     const formats = try allocator.alloc(vk.SurfaceFormatKHR, format_count);
     errdefer allocator.free(formats);
@@ -218,7 +283,7 @@ fn fetchSurfaceSupportDetails(
 
     var present_mode_count: u32 = 0;
     result = try vki().getPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, null);
-    if (result != .success) return error.EnumeratePhysicalDevicePresentModesFailed;
+    if (result != .success) return error.GetPhysicalDevicePresentModesFailed;
 
     const present_modes = try allocator.alloc(vk.PresentModeKHR, present_mode_count);
     errdefer allocator.free(present_modes);

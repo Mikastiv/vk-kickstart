@@ -76,6 +76,12 @@ pub fn main() !void {
     });
     defer swapchain.destroy();
 
+    const images = try swapchain.getImages(allocator);
+    defer allocator.free(images);
+
+    const image_views = try swapchain.getImageViews(allocator, images);
+    defer swapchain.destroyImageViews(allocator, image_views);
+
     while (!window.shouldClose()) {
         c.glfwPollEvents();
     }

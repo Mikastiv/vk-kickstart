@@ -65,7 +65,7 @@ pub fn select(
     std.debug.assert(surface != .null_handle);
 
     for (physical_device_handles) |handle| {
-        const physical_device = try fetchPhysicalDeviceInfo(allocator, handle, surface, instance.api_version);
+        const physical_device = try getPhysicalDeviceInfo(allocator, handle, surface, instance.api_version);
         try physical_device_infos.append(physical_device);
     }
 
@@ -467,7 +467,7 @@ fn isExtensionAvailable(
     return false;
 }
 
-fn fetchPhysicalDeviceInfo(
+fn getPhysicalDeviceInfo(
     allocator: mem.Allocator,
     handle: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
