@@ -32,6 +32,10 @@ You can then import vk-kickstart as a module
 const vkk = @import("vk-kickstart");
 ```
 
+Two build options are available: 
+- `enable_validation`: enable validation layers and creates a debug messenger (default: true if .Debug else false)
+- `verbose`: enable debug output (default: false)
+
 See [build.zig](examples/glfw/build.zig) for an example
 
 ## How to use
@@ -42,9 +46,7 @@ For a code example, see [main.zig](examples/glfw/src/main.zig)
 
 Using the `Instance.Config` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
 
-Note 1: validation layers and the debug messenger are enabled/disabled with a build.zig option: `enable_validation`. They will be enabled by default in debug builds and otherwise disabled. See [build.zig](examples/glfw/build.zig)
-
-Note 2: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
+Note: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
 
 ```zig
 pub const Config = struct {

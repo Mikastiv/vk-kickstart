@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const mem = std.mem;
 const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
@@ -32,10 +33,39 @@ pub fn create(
     var features_13 = physical_device.features_13;
 
     features.p_next = &features_11;
-    if (physical_device.instance_version >= vk.API_VERSION_1_2)
+    if (physical_device.properties.api_version >= vk.API_VERSION_1_2)
         features_11.p_next = &features_12;
-    if (physical_device.instance_version >= vk.API_VERSION_1_3)
+    if (physical_device.properties.api_version >= vk.API_VERSION_1_3)
         features_12.p_next = &features_13;
+
+    if (build_options.verbose) {
+        std.log.debug("----- device creation -----", .{});
+        std.log.debug("queue count: {d}", .{queue_create_infos.len});
+        std.log.debug("graphics family index: {d}", .{physical_device.graphics_family_index});
+        std.log.debug("present family index: {d}", .{physical_device.present_family_index});
+        if (physical_device.transfer_family_index) |family| {
+            std.log.debug("transfer family index: {d}", .{family});
+        }
+        if (physical_device.compute_family_index) |family| {
+            std.log.debug("compute family index: {d}", .{family});
+        }
+
+        std.log.debug("enabled extensions:", .{});
+        for (enabled_extensions) |ext| {
+            std.log.debug("- {s}", .{ext});
+        }
+
+        std.log.debug("enabled features:", .{});
+        printEnabledFeatures(vk.PhysicalDeviceFeatures, features.features);
+        std.log.debug("enabled features (vulkan 1.1):", .{});
+        printEnabledFeatures(vk.PhysicalDeviceVulkan11Features, features_11);
+        if (physical_device.properties.api_version >= vk.API_VERSION_1_2) {
+            printEnabledFeatures(vk.PhysicalDeviceVulkan12Features, features_12);
+        }
+        if (physical_device.properties.api_version >= vk.API_VERSION_1_3) {
+            printEnabledFeatures(vk.PhysicalDeviceVulkan13Features, features_13);
+        }
+    }
 
     const device_info = vk.DeviceCreateInfo{
         .queue_create_info_count = @intCast(queue_create_infos.len),
@@ -67,6 +97,16 @@ pub fn create(
 
 pub fn destroy(self: *const @This()) void {
     vkd().destroyDevice(self.handle, self.allocation_callbacks);
+}
+
+fn printEnabledFeatures(comptime T: type, features: T) void {
+    const info = @typeInfo(T);
+    if (info != .Struct) @compileError("must be a struct");
+    inline for (info.Struct.fields) |field| {
+        if (field.type == vk.Bool32 and @field(features, field.name) != 0) {
+            std.log.debug(" - {s}", .{field.name});
+        }
+    }
 }
 
 fn createQueueInfos(allocator: mem.Allocator, physical_device: *const PhysicalDevice) ![]vk.DeviceQueueCreateInfo {

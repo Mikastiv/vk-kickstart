@@ -8,7 +8,7 @@ const mem = std.mem;
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
 
-const validation_layer: [*:0]const u8 = "VK_LAYER_KHRONOS_validation";
+const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
 const DebugMessenger = if (build_options.enable_validation) vk.DebugUtilsMessengerEXT else void;
 const DebugCallback = if (build_options.enable_validation) vk.PfnDebugUtilsMessengerCallbackEXT else void;
@@ -106,6 +106,38 @@ pub fn create(allocator: mem.Allocator, loader: anytype, config: Config) !@This(
         .pp_enabled_layer_names = required_layers.items.ptr,
         .p_next = next,
     };
+
+    if (build_options.verbose) {
+        std.log.debug("----- instance creation -----", .{});
+
+        std.log.debug("api version: {d}.{d}.{d}", .{
+            vk.apiVersionMajor(api_version),
+            vk.apiVersionMinor(api_version),
+            vk.apiVersionPatch(api_version),
+        });
+
+        std.log.debug("available extensions:", .{});
+        for (available_extensions) |ext| {
+            const ext_name: [*:0]const u8 = @ptrCast(&ext.extension_name);
+            std.log.debug("- {s}", .{ext_name});
+        }
+
+        std.log.debug("available layers:", .{});
+        for (available_layers) |layer| {
+            const layer_name: [*:0]const u8 = @ptrCast(&layer.layer_name);
+            std.log.debug("- {s}", .{layer_name});
+        }
+
+        std.log.debug("enabled extensions:", .{});
+        for (required_extensions.items) |ext| {
+            std.log.debug("- {s}", .{ext});
+        }
+
+        std.log.debug("enabled layers:", .{});
+        for (required_layers.items) |layer| {
+            std.log.debug("- {s}", .{layer});
+        }
+    }
 
     const instance = try vkb().createInstance(&instance_info, config.allocation_callbacks);
     try dispatch.initInstanceDispatch(instance);
@@ -281,8 +313,10 @@ fn getRequiredLayers(
     }
 
     if (build_options.enable_validation) {
-        if (!try addLayer(&layers, available_layers, validation_layer)) {
-            return error.ValidationLayersNotAvailable;
+        for (validation_layers) |layer| {
+            if (!try addLayer(&layers, available_layers, layer)) {
+                return error.ValidationLayersNotAvailable;
+            }
         }
     }
 

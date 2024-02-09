@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const mem = std.mem;
 const vk = @import("vulkan");
 const Device = @import("Device.zig");
@@ -69,7 +70,7 @@ pub fn create(
         allocator.free(surface_support.present_modes);
     }
 
-    const image_count = try selectMinImageCount(&surface_support.capabilities, config.desired_min_image_count);
+    const image_count = selectMinImageCount(&surface_support.capabilities, config.desired_min_image_count);
     const format = pickSurfaceFormat(surface_support.formats, config.desired_formats);
     const present_mode = pickPresentMode(surface_support.present_modes, config.desired_present_modes);
     const extent = pickExtent(&surface_support.capabilities, config.desired_extent);
@@ -111,6 +112,16 @@ pub fn create(
         .clipped = config.clipped,
         .old_swapchain = if (config.old_swapchain) |old| old else .null_handle,
     };
+
+    if (build_options.verbose) {
+        std.log.debug("----- swapchain creation -----", .{});
+        std.log.debug("image count: {d}", .{image_count});
+        std.log.debug("image format: {s}", .{@tagName(format.format)});
+        std.log.debug("color space: {s}", .{@tagName(format.color_space)});
+        std.log.debug("present mode: {s}", .{@tagName(present_mode)});
+        std.log.debug("extent: {d}x{d}", .{ extent.width, extent.height });
+    }
+
     const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, config.allocation_callbacks);
     errdefer vkd().destroySwapchainKHR(device.handle, swapchain, config.allocation_callbacks);
 
@@ -256,7 +267,7 @@ fn pickExtent(
     return actual_extent;
 }
 
-fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_min_image_count: ?u32) !u32 {
+fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_min_image_count: ?u32) u32 {
     const has_max_count = capabilities.max_image_count > 0;
     var image_count = capabilities.min_image_count;
     if (desired_min_image_count) |desired| {

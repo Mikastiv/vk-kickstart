@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_options = @import("build_options");
 const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
 const Instance = @import("Instance.zig");
@@ -98,9 +99,61 @@ pub fn select(
         info.suitable = try isDeviceSuitable(info, surface, options);
     }
 
+    if (build_options.verbose) {
+        std.log.debug("----- physical device selection -----", .{});
+        std.log.debug("found {d} physical device{s}", .{
+            physical_device_handles.len,
+            if (physical_device_handles.len < 2) "" else "s",
+        });
+
+        for (physical_device_infos.items) |info| {
+            const device_name: [*:0]const u8 = @ptrCast(&info.properties.device_name);
+            std.log.debug("{s}", .{device_name});
+
+            std.log.debug(" suitable: {s}", .{if (info.suitable) "yes" else "no"});
+            std.log.debug(" api version: {d}.{d}.{d}", .{
+                vk.apiVersionMajor(info.properties.api_version),
+                vk.apiVersionMinor(info.properties.api_version),
+                vk.apiVersionPatch(info.properties.api_version),
+            });
+            std.log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
+            const local_memory_size = getLocalMemorySize(&info.memory_properties);
+            std.log.debug(" local memory size: {any:.2}", .{std.fmt.fmtIntSizeBin(local_memory_size)});
+
+            std.log.debug(" queue family count: {d}", .{info.queue_families.len});
+            std.log.debug(" graphics family: {s}", .{if (info.graphics_family_index != null) "yes" else "no"});
+            std.log.debug(" present family: {s}", .{if (info.present_family_index != null) "yes" else "no"});
+            std.log.debug(" dedicated transfer family: {s}", .{if (info.dedicated_transfer_family_index != null) "yes" else "no"});
+            std.log.debug(" dedicated compute family: {s}", .{if (info.dedicated_compute_family_index != null) "yes" else "no"});
+            std.log.debug(" separate transfer family: {s}", .{if (info.separate_transfer_family_index != null) "yes" else "no"});
+            std.log.debug(" separate compute family: {s}", .{if (info.separate_compute_family_index != null) "yes" else "no"});
+
+            std.log.debug(" portability extension available: {s}", .{if (info.portability_ext_available) "yes" else "no"});
+
+            std.log.debug(" available extensions:", .{});
+            for (info.available_extensions) |ext| {
+                const ext_name: [*:0]const u8 = @ptrCast(&ext.extension_name);
+                std.log.debug(" - {s}", .{ext_name});
+            }
+
+            std.log.debug(" available features:", .{});
+            printAvailableFeatures(vk.PhysicalDeviceFeatures, info.features);
+            std.log.debug(" available features (vulkan 1.1):", .{});
+            printAvailableFeatures(vk.PhysicalDeviceVulkan11Features, info.features_11);
+            if (info.properties.api_version >= vk.API_VERSION_1_2) {
+                std.log.debug(" available features (vulkan 1.2):", .{});
+                printAvailableFeatures(vk.PhysicalDeviceVulkan12Features, info.features_12);
+            }
+            if (info.properties.api_version >= vk.API_VERSION_1_3) {
+                std.log.debug(" available features (vulkan 1.3):", .{});
+                printAvailableFeatures(vk.PhysicalDeviceVulkan13Features, info.features_13);
+            }
+        }
+    }
+
     std.sort.insertion(PhysicalDeviceInfo, physical_device_infos.items, options, comparePhysicalDevices);
 
-    const selected = physical_device_infos.items[0];
+    const selected = &physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
 
     var extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8 = undefined;
@@ -118,6 +171,11 @@ pub fn select(
 
     setExtension(&extensions_array[extension_count], vk.extension_info.khr_swapchain.name);
     extension_count += 1;
+
+    if (build_options.verbose) {
+        const device_name: [*:0]const u8 = @ptrCast(&selected.properties.device_name);
+        std.log.debug("selected {s}", .{device_name});
+    }
 
     return .{
         .instance_version = instance.api_version,
@@ -159,6 +217,16 @@ pub fn requiredExtensions(self: *const @This(), allocator: mem.Allocator) ![][*:
         ptr.* = @ptrCast(&self.extensions_array[i]);
     }
     return slice;
+}
+
+fn printAvailableFeatures(comptime T: type, features: T) void {
+    const info = @typeInfo(T);
+    if (info != .Struct) @compileError("must be a struct");
+    inline for (info.Struct.fields) |field| {
+        if (field.type == vk.Bool32) {
+            std.log.debug(" - {s}: {s}", .{ field.name, if (@field(features, field.name) != 0) "yes" else "no" });
+        }
+    }
 }
 
 const PhysicalDeviceInfo = struct {
@@ -254,8 +322,8 @@ fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDe
         return a_is_prefered_type;
     }
 
-    const local_memory_a = getLocalMemorySize(a.memory_properties);
-    const local_memory_b = getLocalMemorySize(b.memory_properties);
+    const local_memory_a = getLocalMemorySize(&a.memory_properties);
+    const local_memory_b = getLocalMemorySize(&b.memory_properties);
     if (local_memory_a != local_memory_b) {
         return local_memory_a >= local_memory_b;
     }
@@ -267,11 +335,12 @@ fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDe
     return true;
 }
 
-fn getLocalMemorySize(memory_properties: vk.PhysicalDeviceMemoryProperties) vk.DeviceSize {
+fn getLocalMemorySize(memory_properties: *const vk.PhysicalDeviceMemoryProperties) vk.DeviceSize {
     var size: vk.DeviceSize = 0;
     const heap_count = memory_properties.memory_heap_count;
     for (memory_properties.memory_heaps[0..heap_count]) |heap| {
         if (heap.flags.device_local_bit) {
+            // NOTE: take the sum instead to account for small local fast heap?
             size = @max(size, heap.size);
         }
     }

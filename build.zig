@@ -9,10 +9,12 @@ pub fn build(b: *std.Build) void {
         else => false,
     };
 
-    const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layer");
+    const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layers");
+    const verbose = b.option(bool, "verbose", "Enable debug output");
 
     const build_options = b.addOptions();
     build_options.addOption(bool, "enable_validation", enable_validation orelse default_validation);
+    build_options.addOption(bool, "verbose", verbose orelse false);
 
     const vkzig_dep = b.dependency("vulkan_zig", .{
         .registry = @as([]const u8, b.pathFromRoot("vk.xml")),
