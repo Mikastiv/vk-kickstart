@@ -82,7 +82,7 @@ Pass these configs to `Instance.create()` to create an instance
 
 ### Physical device selection
 
-You can set criterias to select an appropriate physical device for your application using `PhysicalDevice.Options`.
+You can set criterias to select an appropriate physical device for your application using `PhysicalDevice.Options`
 
 Note: VK_KHR_subset (if available) and VK_KHR_swapchain are automatically enabled, no need to add them to the list
 
@@ -166,6 +166,5 @@ pub const Config = struct {
 Pass these configs and a the logical device to `Swapchain.create()` to create the swapchain
 
 ## Todo list
-- Swapchain creation
 - Headless mode
 - Render triangle in glfw example
