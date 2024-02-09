@@ -40,7 +40,7 @@ See [build.zig](examples/glfw/build.zig) for an example
 
 ## How to use
 
-For a code example, see [main.zig](examples/glfw/src/main.zig) for an example
+For a code example, see [main.zig](examples/glfw/src/main.zig)
 
 ### Instance creation
 
