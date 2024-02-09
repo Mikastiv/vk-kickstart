@@ -68,6 +68,8 @@ pub fn select(
     surface: vk.SurfaceKHR,
     options: Options,
 ) !@This() {
+    std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
+
     if (options.required_features_12 != null and instance.api_version < vk.API_VERSION_1_2)
         return error.Features12UnsupportedByInstance;
     if (options.required_features_13 != null and instance.api_version < vk.API_VERSION_1_3)
