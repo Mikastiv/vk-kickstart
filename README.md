@@ -15,10 +15,7 @@ This library helps with:
 
 Add vk-kickstart as a dependency to your build.zig.zon:
 ```
-.vk_kickstart = .{
-    .url = "https://github.com/Mikastiv/vk-kickstart/archive/<LATEST_COMMIT>.tar.gz",
-    .hash = "<COMMIT_HASH>",
-},
+zig fetch --save https://github.com/Mikastiv/vk-kickstart/archive/<COMMIT_HASH>.tar.gz
 ```
 
 Then update your build file with the following:

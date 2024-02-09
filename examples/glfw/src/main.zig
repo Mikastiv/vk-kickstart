@@ -10,13 +10,17 @@ const vkb = vkk.vkb; // Base dispatch
 const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 
-// can override default_functions if more Vulkan functions are required
+// can override default_functions if more or less Vulkan functions are required
+// pub const base_functions = dispatch.base;
 // pub const instance_functions = dispatch.instance;
 // pub const device_functions = dispatch.device;
 
 fn errorCallback(error_code: i32, description: [*c]const u8) callconv(.C) void {
     std.log.err("glfw: {}: {s}\n", .{ error_code, description });
 }
+
+const window_width = 800;
+const window_height = 600;
 
 pub fn main() !void {
     if (c.glfwInit() == c.GLFW_FALSE) return error.GlfwInitFailed;
@@ -29,7 +33,7 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    const window = try Window.init(allocator, 800, 600, "vk-kickstart");
+    const window = try Window.init(allocator, window_width, window_height, "vk-kickstart");
     defer window.deinit(allocator);
 
     const instance = try vkk.Instance.create(allocator, c.glfwGetInstanceProcAddress, .{
@@ -66,6 +70,11 @@ pub fn main() !void {
 
     const queue = device.graphics_queue;
     _ = queue;
+
+    const swapchain = try vkk.Swapchain.create(allocator, &device, surface, .{
+        .desired_extent = .{ .width = window_width, .height = window_height },
+    });
+    defer swapchain.destroy();
 
     while (!window.shouldClose()) {
         c.glfwPollEvents();

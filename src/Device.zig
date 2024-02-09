@@ -9,7 +9,6 @@ const vkd = dispatch.vkd;
 
 handle: vk.Device,
 physical_device: PhysicalDevice,
-surface: vk.SurfaceKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 graphics_queue: vk.Queue,
 present_queue: vk.Queue,
@@ -55,15 +54,14 @@ pub fn create(
     try dispatch.initDeviceDispatch(handle);
     errdefer vkd().destroyDevice(handle, allocation_callbacks);
 
-    const graphics_queue = vkd().getDeviceQueue(handle, physical_device.graphics_family, 0);
-    const present_queue = vkd().getDeviceQueue(handle, physical_device.present_family, 0);
-    const transfer_queue = if (physical_device.transfer_family) |family| vkd().getDeviceQueue(handle, family, 0) else null;
-    const compute_queue = if (physical_device.compute_family) |family| vkd().getDeviceQueue(handle, family, 0) else null;
+    const graphics_queue = vkd().getDeviceQueue(handle, physical_device.graphics_family_index, 0);
+    const present_queue = vkd().getDeviceQueue(handle, physical_device.present_family_index, 0);
+    const transfer_queue = if (physical_device.transfer_family_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
+    const compute_queue = if (physical_device.compute_family_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
 
     return .{
         .handle = handle,
         .physical_device = physical_device.*,
-        .surface = physical_device.surface,
         .allocation_callbacks = allocation_callbacks,
         .graphics_queue = graphics_queue,
         .present_queue = present_queue,
@@ -80,12 +78,12 @@ fn createQueueInfos(allocator: mem.Allocator, physical_device: *const PhysicalDe
     var unique_queue_families = std.AutoHashMap(u32, void).init(allocator);
     defer unique_queue_families.deinit();
 
-    try unique_queue_families.put(physical_device.graphics_family, {});
-    try unique_queue_families.put(physical_device.present_family, {});
-    if (physical_device.transfer_family) |idx| {
+    try unique_queue_families.put(physical_device.graphics_family_index, {});
+    try unique_queue_families.put(physical_device.present_family_index, {});
+    if (physical_device.transfer_family_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
-    if (physical_device.compute_family) |idx| {
+    if (physical_device.compute_family_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
 

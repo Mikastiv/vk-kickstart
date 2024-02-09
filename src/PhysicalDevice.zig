@@ -19,10 +19,10 @@ features_12: vk.PhysicalDeviceVulkan12Features,
 features_13: vk.PhysicalDeviceVulkan13Features,
 extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8,
 extension_count: usize,
-graphics_family: u32,
-present_family: u32,
-transfer_family: ?u32,
-compute_family: ?u32,
+graphics_family_index: u32,
+present_family_index: u32,
+transfer_family_index: ?u32,
+compute_family_index: ?u32,
 
 pub const QueuePreference = enum {
     none,
@@ -61,6 +61,9 @@ pub fn select(
         }
         physical_device_infos.deinit();
     }
+
+    std.debug.assert(surface != .null_handle);
+
     for (physical_device_handles) |handle| {
         const physical_device = try fetchPhysicalDeviceInfo(allocator, handle, surface, instance.api_version);
         try physical_device_infos.append(physical_device);
@@ -100,17 +103,17 @@ pub fn select(
         .memory_properties = selected.memory_properties,
         .extensions_array = extensions_array,
         .extension_count = extension_count,
-        .graphics_family = selected.graphics_family.?,
-        .present_family = selected.present_family.?,
-        .transfer_family = switch (options.transfer_queue) {
+        .graphics_family_index = selected.graphics_family_index.?,
+        .present_family_index = selected.present_family_index.?,
+        .transfer_family_index = switch (options.transfer_queue) {
             .none => null,
-            .dedicated => selected.dedicated_transfer_family,
-            .separate => selected.separate_transfer_family,
+            .dedicated => selected.dedicated_transfer_family_index,
+            .separate => selected.separate_transfer_family_index,
         },
-        .compute_family = switch (options.compute_queue) {
+        .compute_family_index = switch (options.compute_queue) {
             .none => null,
-            .dedicated => selected.dedicated_compute_family,
-            .separate => selected.separate_compute_family,
+            .dedicated => selected.dedicated_compute_family_index,
+            .separate => selected.separate_compute_family_index,
         },
     };
 }
@@ -138,12 +141,12 @@ const PhysicalDeviceInfo = struct {
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     available_extensions: []vk.ExtensionProperties,
     queue_families: []vk.QueueFamilyProperties,
-    graphics_family: ?u32,
-    present_family: ?u32,
-    dedicated_transfer_family: ?u32,
-    dedicated_compute_family: ?u32,
-    separate_transfer_family: ?u32,
-    separate_compute_family: ?u32,
+    graphics_family_index: ?u32,
+    present_family_index: ?u32,
+    dedicated_transfer_family_index: ?u32,
+    dedicated_compute_family_index: ?u32,
+    separate_transfer_family_index: ?u32,
+    separate_compute_family_index: ?u32,
     portability_ext_available: bool,
     suitable: bool = true,
 };
@@ -258,10 +261,10 @@ fn isDeviceSuitable(
 
     if (device.properties.api_version < options.required_api_version) return false;
 
-    if (options.transfer_queue == .dedicated and device.dedicated_transfer_family == null) return false;
-    if (options.transfer_queue == .separate and device.separate_transfer_family == null) return false;
-    if (options.compute_queue == .dedicated and device.dedicated_compute_family == null) return false;
-    if (options.compute_queue == .separate and device.separate_compute_family == null) return false;
+    if (options.transfer_queue == .dedicated and device.dedicated_transfer_family_index == null) return false;
+    if (options.transfer_queue == .separate and device.separate_transfer_family_index == null) return false;
+    if (options.compute_queue == .dedicated and device.dedicated_compute_family_index == null) return false;
+    if (options.compute_queue == .separate and device.separate_compute_family_index == null) return false;
 
     if (!supportsRequiredFeatures(device.features, options.required_features)) return false;
     if (!supportsRequiredFeatures11(device.features_11, options.required_features_11)) return false;
@@ -274,7 +277,7 @@ fn isDeviceSuitable(
         }
     }
 
-    if (device.graphics_family == null or device.present_family == null) return false;
+    if (device.graphics_family_index == null or device.present_family_index == null) return false;
     if (!isExtensionAvailable(device.available_extensions, vk.extension_info.khr_swapchain.name)) {
         return false;
     }
@@ -506,7 +509,7 @@ fn fetchPhysicalDeviceInfo(
 
     vki().getPhysicalDeviceQueueFamilyProperties(handle, &family_count, queue_families.ptr);
 
-    const graphics_family = getQueueStrict(queue_families, .{ .graphics_bit = true }, .{});
+    const graphics_family_index = getQueueStrict(queue_families, .{ .graphics_bit = true }, .{});
     const dedicated_transfer = getQueueStrict(
         queue_families,
         .{ .transfer_bit = true },
@@ -527,7 +530,7 @@ fn fetchPhysicalDeviceInfo(
         .{ .compute_bit = true },
         .{ .transfer_bit = true },
     );
-    const present_family = try getPresentQueue(handle, queue_families, surface);
+    const present_family_index = try getPresentQueue(handle, queue_families, surface);
 
     return .{
         .handle = handle,
@@ -539,12 +542,12 @@ fn fetchPhysicalDeviceInfo(
         .memory_properties = memory_properties,
         .available_extensions = available_extensions,
         .queue_families = queue_families,
-        .graphics_family = graphics_family,
-        .present_family = present_family,
-        .dedicated_transfer_family = dedicated_transfer,
-        .dedicated_compute_family = dedicated_compute,
-        .separate_transfer_family = separate_transfer,
-        .separate_compute_family = separate_compute,
+        .graphics_family_index = graphics_family_index,
+        .present_family_index = present_family_index,
+        .dedicated_transfer_family_index = dedicated_transfer,
+        .dedicated_compute_family_index = dedicated_compute,
+        .separate_transfer_family_index = separate_transfer,
+        .separate_compute_family_index = separate_compute,
         .portability_ext_available = isExtensionAvailable(available_extensions, vk.extension_info.khr_portability_subset.name),
     };
 }

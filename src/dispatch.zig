@@ -3,6 +3,7 @@ const vk = @import("vulkan");
 const build_options = @import("build_options");
 const root = @import("root");
 
+const base_functions = if (@hasDecl(root, "base_functions")) root.base_functions else default_base_functions;
 const instance_functions = if (@hasDecl(root, "instance_functions")) root.instance_functions else default_instance_functions;
 const device_functions = if (@hasDecl(root, "device_functions")) root.device_functions else default_device_functions;
 
@@ -51,7 +52,7 @@ pub fn vkd() DeviceDispatch {
     return device;
 }
 
-pub const BaseDispatch = vk.BaseWrapper(default_base_functions);
+pub const BaseDispatch = vk.BaseWrapper(base_functions);
 pub const InstanceDispatch = vk.InstanceWrapper(instance_functions);
 pub const DeviceDispatch = vk.DeviceWrapper(device_functions);
 
@@ -74,11 +75,11 @@ const default_instance_functions = vk.InstanceCommandFlags{
     .getPhysicalDeviceQueueFamilyProperties = true,
     .getPhysicalDeviceMemoryProperties = true,
     .getPhysicalDeviceFeatures = true,
-    .getPhysicalDeviceFormatProperties = true,
-    .getPhysicalDeviceImageFormatProperties = true,
     .getPhysicalDeviceSurfaceSupportKHR = true,
+    .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
     .getPhysicalDeviceSurfaceFormatsKHR = true,
     .getPhysicalDeviceSurfacePresentModesKHR = true,
+    .getPhysicalDeviceImageFormatProperties = true,
     .createDebugUtilsMessengerEXT = true,
     .destroyDebugUtilsMessengerEXT = true,
     .destroySurfaceKHR = true,
@@ -88,4 +89,6 @@ const default_instance_functions = vk.InstanceCommandFlags{
 const default_device_functions = vk.DeviceCommandFlags{
     .destroyDevice = true,
     .getDeviceQueue = true,
+    .createSwapchainKHR = true,
+    .destroySwapchainKHR = true,
 };
