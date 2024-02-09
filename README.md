@@ -10,6 +10,7 @@ This library helps with:
 - Physical device selection based on a set of criteria
 - Enabling physical device extensions
 - Device creation
+- Swapchain creation
 
 ## Setting up
 
