@@ -36,15 +36,17 @@ const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 ```
 
-See [main.zig](examples/glfw/src/main.zig) for an example
+See [build.zig](examples/glfw/build.zig) for an example
 
 ## How to use
+
+For a code example, see [main.zig](examples/glfw/src/main.zig) for an example
 
 ### Instance creation
 
 Using the `Instance.Config` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
 
-Note 1: validation layers and the debug messenger are enabled/disabled with a build.zig option: `enable_validation`. They will be enabled by default in debug builds and otherwise disabled. [See build.zig](examples/glfw/build.zig)
+Note 1: validation layers and the debug messenger are enabled/disabled with a build.zig option: `enable_validation`. They will be enabled by default in debug builds and otherwise disabled. See [build.zig](examples/glfw/build.zig)
 
 Note 2: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
 
