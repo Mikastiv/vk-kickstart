@@ -38,4 +38,6 @@ pub const device = vk.DeviceCommandFlags{
     .destroySemaphore = true,
     .createFence = true,
     .destroyFence = true,
+    .createShaderModule = true,
+    .destroyShaderModule = true,
 };

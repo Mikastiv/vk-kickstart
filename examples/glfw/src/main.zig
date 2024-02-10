@@ -4,6 +4,7 @@ const vk = @import("vulkan-zig");
 const vkk = @import("vk-kickstart");
 const dispatch = @import("dispatch.zig");
 const Window = @import("Window.zig");
+const Shaders = @import("shaders");
 
 // Vulkan dispatchers
 const vkb = vkk.vkb; // Base dispatch
@@ -118,9 +119,23 @@ pub fn main() !void {
         }
     }
 
+    const vertex_shader = try createShaderModule(device.handle, &Shaders.shader_vert);
+    defer vkd().destroyShaderModule(device.handle, vertex_shader, null);
+    const fragment_shader = try createShaderModule(device.handle, &Shaders.shader_frag);
+    defer vkd().destroyShaderModule(device.handle, fragment_shader, null);
+
     while (!window.shouldClose()) {
         c.glfwPollEvents();
     }
+}
+
+fn createShaderModule(device: vk.Device, bytecode: []align(4) const u8) !vk.ShaderModule {
+    const create_info = vk.ShaderModuleCreateInfo{
+        .code_size = bytecode.len,
+        .p_code = std.mem.bytesAsSlice(u32, bytecode).ptr,
+    };
+
+    return vkd().createShaderModule(device, &create_info, null);
 }
 
 fn createSyncObjects(device: vk.Device) !SyncObjects {
