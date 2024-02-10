@@ -3,8 +3,10 @@ const build_options = @import("build_options");
 const mem = std.mem;
 const vk = @import("vulkan-zig");
 const Device = @import("Device.zig");
-
 const disptach = @import("dispatch.zig");
+
+const log = std.log.scoped(.vk_kickstart);
+
 const vki = disptach.vki;
 const vkd = disptach.vkd;
 
@@ -114,12 +116,12 @@ pub fn create(
     };
 
     if (build_options.verbose) {
-        std.log.debug("----- swapchain creation -----", .{});
-        std.log.debug("image count: {d}", .{image_count});
-        std.log.debug("image format: {s}", .{@tagName(format.format)});
-        std.log.debug("color space: {s}", .{@tagName(format.color_space)});
-        std.log.debug("present mode: {s}", .{@tagName(present_mode)});
-        std.log.debug("extent: {d}x{d}", .{ extent.width, extent.height });
+        log.debug("----- swapchain creation -----", .{});
+        log.debug("image count: {d}", .{image_count});
+        log.debug("image format: {s}", .{@tagName(format.format)});
+        log.debug("color space: {s}", .{@tagName(format.color_space)});
+        log.debug("present mode: {s}", .{@tagName(present_mode)});
+        log.debug("extent: {d}x{d}", .{ extent.width, extent.height });
     }
 
     const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, config.allocation_callbacks);

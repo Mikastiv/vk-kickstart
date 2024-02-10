@@ -5,6 +5,8 @@ const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
 const mem = std.mem;
 
+const log = std.log.scoped(.vk_kickstart);
+
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
 
@@ -108,34 +110,34 @@ pub fn create(allocator: mem.Allocator, loader: anytype, config: Config) !@This(
     };
 
     if (build_options.verbose) {
-        std.log.debug("----- instance creation -----", .{});
+        log.debug("----- instance creation -----", .{});
 
-        std.log.debug("api version: {d}.{d}.{d}", .{
+        log.debug("api version: {d}.{d}.{d}", .{
             vk.apiVersionMajor(api_version),
             vk.apiVersionMinor(api_version),
             vk.apiVersionPatch(api_version),
         });
 
-        std.log.debug("available extensions:", .{});
+        log.debug("available extensions:", .{});
         for (available_extensions) |ext| {
             const ext_name: [*:0]const u8 = @ptrCast(&ext.extension_name);
-            std.log.debug("- {s}", .{ext_name});
+            log.debug("- {s}", .{ext_name});
         }
 
-        std.log.debug("available layers:", .{});
+        log.debug("available layers:", .{});
         for (available_layers) |layer| {
             const layer_name: [*:0]const u8 = @ptrCast(&layer.layer_name);
-            std.log.debug("- {s}", .{layer_name});
+            log.debug("- {s}", .{layer_name});
         }
 
-        std.log.debug("enabled extensions:", .{});
+        log.debug("enabled extensions:", .{});
         for (required_extensions.items) |ext| {
-            std.log.debug("- {s}", .{ext});
+            log.debug("- {s}", .{ext});
         }
 
-        std.log.debug("enabled layers:", .{});
+        log.debug("enabled layers:", .{});
         for (required_layers.items) |layer| {
-            std.log.debug("- {s}", .{layer});
+            log.debug("- {s}", .{layer});
         }
     }
 
@@ -169,13 +171,13 @@ fn defaultDebugMessageCallback(
         const format = "{s}\n";
 
         if (severity.error_bit_ext) {
-            std.log.err(format, .{data.p_message});
+            log.err(format, .{data.p_message});
         } else if (severity.warning_bit_ext) {
-            std.log.warn(format, .{data.p_message});
+            log.warn(format, .{data.p_message});
         } else if (severity.info_bit_ext) {
-            std.log.info(format, .{data.p_message});
+            log.info(format, .{data.p_message});
         } else {
-            std.log.debug(format, .{data.p_message});
+            log.debug(format, .{data.p_message});
         }
     }
     return vk.FALSE;

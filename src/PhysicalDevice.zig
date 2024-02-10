@@ -5,6 +5,8 @@ const dispatch = @import("dispatch.zig");
 const Instance = @import("Instance.zig");
 const mem = std.mem;
 
+const log = std.log.scoped(.vk_kickstart);
+
 const vki = dispatch.vki;
 
 pub const max_extensions = 32;
@@ -100,52 +102,52 @@ pub fn select(
     }
 
     if (build_options.verbose) {
-        std.log.debug("----- physical device selection -----", .{});
-        std.log.debug("found {d} physical device{s}", .{
+        log.debug("----- physical device selection -----", .{});
+        log.debug("found {d} physical device{s}", .{
             physical_device_handles.len,
             if (physical_device_handles.len < 2) "" else "s",
         });
 
         for (physical_device_infos.items) |info| {
             const device_name: [*:0]const u8 = @ptrCast(&info.properties.device_name);
-            std.log.debug("{s}", .{device_name});
+            log.debug("{s}", .{device_name});
 
-            std.log.debug(" suitable: {s}", .{if (info.suitable) "yes" else "no"});
-            std.log.debug(" api version: {d}.{d}.{d}", .{
+            log.debug(" suitable: {s}", .{if (info.suitable) "yes" else "no"});
+            log.debug(" api version: {d}.{d}.{d}", .{
                 vk.apiVersionMajor(info.properties.api_version),
                 vk.apiVersionMinor(info.properties.api_version),
                 vk.apiVersionPatch(info.properties.api_version),
             });
-            std.log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
+            log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
             const local_memory_size = getLocalMemorySize(&info.memory_properties);
-            std.log.debug(" local memory size: {any:.2}", .{std.fmt.fmtIntSizeBin(local_memory_size)});
+            log.debug(" local memory size: {any:.2}", .{std.fmt.fmtIntSizeBin(local_memory_size)});
 
-            std.log.debug(" queue family count: {d}", .{info.queue_families.len});
-            std.log.debug(" graphics family: {s}", .{if (info.graphics_family_index != null) "yes" else "no"});
-            std.log.debug(" present family: {s}", .{if (info.present_family_index != null) "yes" else "no"});
-            std.log.debug(" dedicated transfer family: {s}", .{if (info.dedicated_transfer_family_index != null) "yes" else "no"});
-            std.log.debug(" dedicated compute family: {s}", .{if (info.dedicated_compute_family_index != null) "yes" else "no"});
-            std.log.debug(" separate transfer family: {s}", .{if (info.separate_transfer_family_index != null) "yes" else "no"});
-            std.log.debug(" separate compute family: {s}", .{if (info.separate_compute_family_index != null) "yes" else "no"});
+            log.debug(" queue family count: {d}", .{info.queue_families.len});
+            log.debug(" graphics family: {s}", .{if (info.graphics_family_index != null) "yes" else "no"});
+            log.debug(" present family: {s}", .{if (info.present_family_index != null) "yes" else "no"});
+            log.debug(" dedicated transfer family: {s}", .{if (info.dedicated_transfer_family_index != null) "yes" else "no"});
+            log.debug(" dedicated compute family: {s}", .{if (info.dedicated_compute_family_index != null) "yes" else "no"});
+            log.debug(" separate transfer family: {s}", .{if (info.separate_transfer_family_index != null) "yes" else "no"});
+            log.debug(" separate compute family: {s}", .{if (info.separate_compute_family_index != null) "yes" else "no"});
 
-            std.log.debug(" portability extension available: {s}", .{if (info.portability_ext_available) "yes" else "no"});
+            log.debug(" portability extension available: {s}", .{if (info.portability_ext_available) "yes" else "no"});
 
-            std.log.debug(" available extensions:", .{});
+            log.debug(" available extensions:", .{});
             for (info.available_extensions) |ext| {
                 const ext_name: [*:0]const u8 = @ptrCast(&ext.extension_name);
-                std.log.debug(" - {s}", .{ext_name});
+                log.debug(" - {s}", .{ext_name});
             }
 
-            std.log.debug(" available features:", .{});
+            log.debug(" available features:", .{});
             printAvailableFeatures(vk.PhysicalDeviceFeatures, info.features);
-            std.log.debug(" available features (vulkan 1.1):", .{});
+            log.debug(" available features (vulkan 1.1):", .{});
             printAvailableFeatures(vk.PhysicalDeviceVulkan11Features, info.features_11);
             if (info.properties.api_version >= vk.API_VERSION_1_2) {
-                std.log.debug(" available features (vulkan 1.2):", .{});
+                log.debug(" available features (vulkan 1.2):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan12Features, info.features_12);
             }
             if (info.properties.api_version >= vk.API_VERSION_1_3) {
-                std.log.debug(" available features (vulkan 1.3):", .{});
+                log.debug(" available features (vulkan 1.3):", .{});
                 printAvailableFeatures(vk.PhysicalDeviceVulkan13Features, info.features_13);
             }
         }
@@ -174,7 +176,7 @@ pub fn select(
 
     if (build_options.verbose) {
         const device_name: [*:0]const u8 = @ptrCast(&selected.properties.device_name);
-        std.log.debug("selected {s}", .{device_name});
+        log.debug("selected {s}", .{device_name});
     }
 
     return .{
@@ -224,7 +226,7 @@ fn printAvailableFeatures(comptime T: type, features: T) void {
     if (info != .Struct) @compileError("must be a struct");
     inline for (info.Struct.fields) |field| {
         if (field.type == vk.Bool32) {
-            std.log.debug(" - {s}: {s}", .{ field.name, if (@field(features, field.name) != 0) "yes" else "no" });
+            log.debug(" - {s}: {s}", .{ field.name, if (@field(features, field.name) != 0) "yes" else "no" });
         }
     }
 }

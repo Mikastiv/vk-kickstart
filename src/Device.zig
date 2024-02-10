@@ -5,6 +5,8 @@ const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
 
+const log = std.log.scoped(.vk_kickstart);
+
 const vki = dispatch.vki;
 const vkd = dispatch.vkd;
 
@@ -39,25 +41,25 @@ pub fn create(
         features_12.p_next = &features_13;
 
     if (build_options.verbose) {
-        std.log.debug("----- device creation -----", .{});
-        std.log.debug("queue count: {d}", .{queue_create_infos.len});
-        std.log.debug("graphics family index: {d}", .{physical_device.graphics_family_index});
-        std.log.debug("present family index: {d}", .{physical_device.present_family_index});
+        log.debug("----- device creation -----", .{});
+        log.debug("queue count: {d}", .{queue_create_infos.len});
+        log.debug("graphics family index: {d}", .{physical_device.graphics_family_index});
+        log.debug("present family index: {d}", .{physical_device.present_family_index});
         if (physical_device.transfer_family_index) |family| {
-            std.log.debug("transfer family index: {d}", .{family});
+            log.debug("transfer family index: {d}", .{family});
         }
         if (physical_device.compute_family_index) |family| {
-            std.log.debug("compute family index: {d}", .{family});
+            log.debug("compute family index: {d}", .{family});
         }
 
-        std.log.debug("enabled extensions:", .{});
+        log.debug("enabled extensions:", .{});
         for (enabled_extensions) |ext| {
-            std.log.debug("- {s}", .{ext});
+            log.debug("- {s}", .{ext});
         }
 
-        std.log.debug("enabled features:", .{});
+        log.debug("enabled features:", .{});
         printEnabledFeatures(vk.PhysicalDeviceFeatures, features.features);
-        std.log.debug("enabled features (vulkan 1.1):", .{});
+        log.debug("enabled features (vulkan 1.1):", .{});
         printEnabledFeatures(vk.PhysicalDeviceVulkan11Features, features_11);
         if (physical_device.properties.api_version >= vk.API_VERSION_1_2) {
             printEnabledFeatures(vk.PhysicalDeviceVulkan12Features, features_12);
@@ -104,7 +106,7 @@ fn printEnabledFeatures(comptime T: type, features: T) void {
     if (info != .Struct) @compileError("must be a struct");
     inline for (info.Struct.fields) |field| {
         if (field.type == vk.Bool32 and @field(features, field.name) != 0) {
-            std.log.debug(" - {s}", .{field.name});
+            log.debug(" - {s}", .{field.name});
         }
     }
 }

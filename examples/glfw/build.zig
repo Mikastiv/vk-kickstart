@@ -20,9 +20,8 @@ pub fn build(b: *std.Build) void {
 
     const kickstart_dep = b.dependency("vk_kickstart", .{
         .registry = xml_path,
-        // can overwrite the default settings for validation layers and debug callback
-        // .enable_validation = false, // default: true for .Debug else false
-        // .verbose = true, // enable debug output; it uses std.log.debug so it only prints when compiling with .Debug
+        // .enable_validation = false,
+        // .verbose = true,
     });
 
     exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
