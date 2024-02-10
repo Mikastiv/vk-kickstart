@@ -206,7 +206,7 @@ const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 ```
 
-Not all functions are loaded by default. If you need other functions you will need to overwrite them in the root module, like you would do for std.log.
+Not all functions are loaded by default. If you need other functions you will need to overwrite them in the root module like you would do for std.log.
 
 In your `main.zig`:
 ```zig
