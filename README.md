@@ -14,7 +14,7 @@ This library helps with:
 
 ## Setting up
 
-Add vulkan-zig as a dependency to your build.zig.zon:
+Add [`vulkan-zig`](https://github.com/Snektron/vulkan-zig) as a dependency to your build.zig.zon:
 ```
 zig fetch --save=vulkan_zig "https://github.com/Snektron/vulkan-zig/archive/<COMMIT_HASH>.tar.gz"
 ```
@@ -56,7 +56,7 @@ const kickstart_dep = b.dependency("vk_kickstart", .{
 });
 ```
 
-You can then import vk-kickstart as a module and vulkan-zig
+You can then import `vk-kickstart` as a module and vulkan-zig
 ```zig
 const vkk = @import("vk-kickstart");
 const vk = @import("vulkan-zig");
