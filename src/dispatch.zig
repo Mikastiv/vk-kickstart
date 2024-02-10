@@ -1,5 +1,5 @@
 const std = @import("std");
-const vk = @import("vulkan");
+const vk = @import("vulkan-zig");
 const build_options = @import("build_options");
 const root = @import("root");
 

@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         else => false,
     };
 
+    const registry = b.option([]const u8, "registry", "Path to the Vulkan registry") orelse @panic("provide path to the Vulkan registry");
     const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layers");
     const verbose = b.option(bool, "verbose", "Enable debug output");
 
@@ -17,17 +18,16 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "verbose", verbose orelse false);
 
     const vkzig_dep = b.dependency("vulkan_zig", .{
-        .registry = @as([]const u8, b.pathFromRoot("vk.xml")),
+        .registry = registry,
     });
 
     const kickstart = b.addModule("vk-kickstart", .{
         .root_source_file = .{ .path = "src/vk_kickstart.zig" },
         .imports = &.{
-            .{ .name = "vulkan", .module = vkzig_dep.module("vulkan-zig") },
+            .{ .name = "vulkan-zig", .module = vkzig_dep.module("vulkan-zig") },
         },
     });
     kickstart.addOptions("build_options", build_options);
-    b.modules.put(b.dupe("vulkan-zig"), vkzig_dep.module("vulkan-zig")) catch @panic("OOM");
 
     const lib_unit_tests = b.addTest(.{
         .root_source_file = .{ .path = "src/root.zig" },

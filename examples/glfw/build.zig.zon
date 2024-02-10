@@ -6,6 +6,10 @@
             .url = "https://pkg.machengine.org/glfw/586e14a964740747ca7913fc17096b3bb3d52409.tar.gz",
             .hash = "122091debcee20ff2aaf983a9e8c215d4e50cc6caf44975442218901ea728e7dd79a",
         },
+        .vulkan_zig = .{
+            .url = "https://github.com/Snektron/vulkan-zig/archive/2b6d7691f15cd037f8f2c85ddd81e41dad875b4d.tar.gz",
+            .hash = "122047b773db60d234bfe5018a5cd6a0f46ee19456a0c824499d75b8ea018cabdf80",
+        },
         .vk_kickstart = .{
             .path = "../../",
         },

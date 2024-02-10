@@ -1,7 +1,7 @@
 const std = @import("std");
 const build_options = @import("build_options");
 const mem = std.mem;
-const vk = @import("vulkan");
+const vk = @import("vulkan-zig");
 const Device = @import("Device.zig");
 
 const disptach = @import("dispatch.zig");

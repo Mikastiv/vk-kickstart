@@ -14,25 +14,52 @@ This library helps with:
 
 ## Setting up
 
-Add vk-kickstart as a dependency to your build.zig.zon:
+Add vulkan-zig as a dependency to your build.zig.zon:
+```
+zig fetch --save=vulkan_zig "https://github.com/Snektron/vulkan-zig/archive/<COMMIT_HASH>.tar.gz"
+```
+You should use the same version as vk-kickstart for the commit hash. See [build.zig.zon](build.zig.zon)
+
+Then add vk-kickstart:
 ```
 zig fetch --save https://github.com/Mikastiv/vk-kickstart/archive/<COMMIT_HASH>.tar.gz
 ```
 
 Then update your build file with the following:
 ```zig
+// Provide the path to the Vulkan registry
+const xml_path: []const u8 = b.pathFromRoot("vk.xml");
+
+// Add the vulkan-zig module
+const vkzig_dep = b.dependency("vulkan_zig", .{
+    .registry = xml_path,
+});
+exe.root_module.addImport("vulkan", vkzig_dep.module("vulkan-zig"));
+
+// Add vk-kickstart
 const kickstart_dep = b.dependency("vk_kickstart", .{
-  // .enable_validation = true, // enable validation layers and creates a debug messenger (default: true if .Debug else false)
-  // .verbose = true, // enable debug output (default: false); it uses std.log.debug so it only print when compiling with .Debug
+    .registry = xml_path,
+    // Optional
+    .enable_validation = true, // By default this is true when compiling in .Debug mode
+    .verbose = true, // False by default
 });
 exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
-// vk-kickstart uses vulkan-zig under the hood and provides it as module
-exe.root_module.addImport("vulkan", kickstart_dep.module("vulkan-zig"));
 ```
 
-You can then import vk-kickstart as a module
+There are two more build options that are optional:
+```zig
+const kickstart_dep = b.dependency("vk_kickstart", .{
+    // Enables debug layers and debug messenger
+    .enable_validation = true, // By default this is true when compiling in .Debug mode
+    // Enables debug output
+    .verbose = true, // False by default
+});
+```
+
+You can then import vk-kickstart as a module and vulkan-zig
 ```zig
 const vkk = @import("vk-kickstart");
+const vk = @import("vulkan-zig");
 ```
 
 See [build.zig](examples/glfw/build.zig) for an example
@@ -48,6 +75,8 @@ Using the `Instance.Config` struct's fields, you can you can choose how you want
 Note: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
 
 ```zig
+const vk = @import("vulkan-zig");
+
 pub const Config = struct {
     /// Application name
     app_name: [*:0]const u8 = "",
@@ -84,6 +113,8 @@ You can set criterias to select an appropriate physical device for your applicat
 Note: VK_KHR_subset (if available) and VK_KHR_swapchain are automatically enabled, no need to add them to the list
 
 ```zig
+const vk = @import("vulkan-zig");
+
 pub const Options = struct {
     /// Name of the device to select
     name: ?[*:0]const u8 = null,
@@ -122,6 +153,8 @@ For this, you only need to call `Device.create()` with the previously selected p
 Finally to create a swapchain, use `Swapchain.Config`
 
 ```zig
+const vk = @import("vulkan-zig");
+
 pub const Config = struct {
     /// Desired size (in pixels) of the swapchain image(s)
     /// These values will be clamped within the capabilities of the device
@@ -173,7 +206,7 @@ const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 ```
 
-Not all functions are loaded by default, only the ones necessary for `vk-kickstart`. More default functions might be loaded in the future, but for now you will need to overwrite them in the root module, like you would do for std.log.
+Not all functions are loaded by default. If you need other functions you will need to overwrite them in the root module, like you would do for std.log.
 
 In your `main.zig`:
 ```zig

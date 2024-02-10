@@ -1,6 +1,6 @@
 const std = @import("std");
 const c = @import("c.zig");
-const vk = @import("vulkan");
+const vk = @import("vulkan-zig");
 
 width: u32,
 height: u32,
