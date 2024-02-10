@@ -18,7 +18,7 @@ Add [`vulkan-zig`](https://github.com/Snektron/vulkan-zig) as a dependency to yo
 ```
 zig fetch --save=vulkan_zig "https://github.com/Snektron/vulkan-zig/archive/<COMMIT_HASH>.tar.gz"
 ```
-You should use the same version as vk-kickstart for the commit hash. See [build.zig.zon](build.zig.zon)
+You might want to use the same version as vk-kickstart for the commit hash. See [build.zig.zon](build.zig.zon)
 
 Then add vk-kickstart:
 ```
