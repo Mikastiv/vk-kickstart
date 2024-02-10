@@ -55,6 +55,7 @@ pub fn main() !void {
 
     const physical_device = try vkk.PhysicalDevice.select(allocator, &instance, surface, .{
         .transfer_queue = .dedicated,
+        .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{
             "VK_KHR_acceleration_structure",
             "VK_KHR_deferred_host_operations",
@@ -65,10 +66,6 @@ pub fn main() !void {
         },
         .required_features_12 = .{
             .descriptor_indexing = vk.TRUE,
-        },
-        .required_features_13 = .{
-            .dynamic_rendering = vk.TRUE,
-            .synchronization_2 = vk.TRUE,
         },
     });
 
@@ -137,9 +134,176 @@ pub fn main() !void {
     );
     defer vkd().destroyPipeline(device.handle, pipeline, null);
 
+    const command_pool = try createCommandPool(device.handle, device.physical_device.graphics_family_index);
+    defer vkd().destroyCommandPool(device.handle, command_pool, null);
+
+    const command_buffers = try createCommandBuffers(allocator, device.handle, command_pool, max_frames_in_flight);
+    defer allocator.free(command_buffers);
+
+    var current_frame: u32 = 0;
     while (!window.shouldClose()) {
         c.glfwPollEvents();
+
+        const result = try vkd().waitForFences(
+            device.handle,
+            1,
+            @ptrCast(&sync.in_flight_fences[current_frame]),
+            vk.TRUE,
+            std.math.maxInt(u64),
+        );
+        std.debug.assert(result == .success);
+
+        const next_image_result = vkd().acquireNextImageKHR(
+            device.handle,
+            swapchain.handle,
+            std.math.maxInt(u64),
+            sync.image_available_semaphores[current_frame],
+            .null_handle,
+        ) catch |err| {
+            if (err == error.OutOfDateKHR) {
+                // recreate
+                continue;
+            }
+            return err;
+        };
+        std.debug.assert(next_image_result.result == .success);
+
+        const image_index = next_image_result.image_index;
+        try recordCommandBuffer(
+            command_buffers[current_frame],
+            pipeline,
+            render_pass,
+            framebuffers[image_index],
+            swapchain.extent,
+        );
+
+        const wait_semaphores = [_]vk.Semaphore{sync.image_available_semaphores[current_frame]};
+        const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
+        const signal_semaphores = [_]vk.Semaphore{sync.render_finished_semaphores[current_frame]};
+        const submit_info = vk.SubmitInfo{
+            .wait_semaphore_count = wait_semaphores.len,
+            .p_wait_semaphores = &wait_semaphores,
+            .p_wait_dst_stage_mask = &wait_stages,
+            .command_buffer_count = 1,
+            .p_command_buffers = @ptrCast(&command_buffers[current_frame]),
+            .signal_semaphore_count = signal_semaphores.len,
+            .p_signal_semaphores = &signal_semaphores,
+        };
+
+        const fences = [_]vk.Fence{sync.in_flight_fences[current_frame]};
+        try vkd().resetFences(device.handle, fences.len, &fences);
+
+        const submits = [_]vk.SubmitInfo{submit_info};
+        try vkd().queueSubmit(
+            device.graphics_queue,
+            submits.len,
+            &submits,
+            sync.in_flight_fences[current_frame],
+        );
+
+        const indices = [_]u32{image_index};
+        const present_info = vk.PresentInfoKHR{
+            .wait_semaphore_count = signal_semaphores.len,
+            .p_wait_semaphores = &signal_semaphores,
+            .swapchain_count = 1,
+            .p_swapchains = @ptrCast(&swapchain.handle),
+            .p_image_indices = &indices,
+        };
+
+        const present_result = vkd().queuePresentKHR(device.present_queue, &present_info) catch |err| {
+            if (err == error.OutOfDateKHR) {
+                // recreate
+                continue;
+            }
+            return err;
+        };
+
+        if (present_result == .suboptimal_khr) {
+            // recreate
+            continue;
+        }
+
+        current_frame = (current_frame + 1) % max_frames_in_flight;
     }
+
+    try vkd().deviceWaitIdle(device.handle);
+}
+
+fn recordCommandBuffer(
+    command_buffer: vk.CommandBuffer,
+    pipeline: vk.Pipeline,
+    render_pass: vk.RenderPass,
+    framebuffer: vk.Framebuffer,
+    extent: vk.Extent2D,
+) !void {
+    const begin_info = vk.CommandBufferBeginInfo{};
+    try vkd().beginCommandBuffer(command_buffer, &begin_info);
+
+    const clear_values = [_]vk.ClearValue{
+        .{ .color = .{ .float_32 = .{ 0.1, 0.1, 0.1, 1 } } },
+    };
+    const render_pass_begin_info = vk.RenderPassBeginInfo{
+        .render_pass = render_pass,
+        .framebuffer = framebuffer,
+        .render_area = .{
+            .offset = .{ .x = 0, .y = 0 },
+            .extent = extent,
+        },
+        .clear_value_count = clear_values.len,
+        .p_clear_values = &clear_values,
+    };
+
+    vkd().cmdBeginRenderPass(command_buffer, &render_pass_begin_info, .@"inline");
+
+    const viewport = vk.Viewport{
+        .x = 0,
+        .y = 0,
+        .width = @floatFromInt(extent.width),
+        .height = @floatFromInt(extent.height),
+        .min_depth = 0,
+        .max_depth = 1,
+    };
+    vkd().cmdSetViewport(command_buffer, 0, 1, @ptrCast(&viewport));
+
+    const scissor = vk.Rect2D{
+        .offset = .{ .x = 0, .y = 0 },
+        .extent = extent,
+    };
+    vkd().cmdSetScissor(command_buffer, 0, 1, @ptrCast(&scissor));
+
+    vkd().cmdBindPipeline(command_buffer, .graphics, pipeline);
+
+    vkd().cmdDraw(command_buffer, 3, 1, 0, 0);
+
+    vkd().cmdEndRenderPass(command_buffer);
+    try vkd().endCommandBuffer(command_buffer);
+}
+
+fn createCommandBuffers(
+    allocator: std.mem.Allocator,
+    device: vk.Device,
+    command_pool: vk.CommandPool,
+    count: u32,
+) ![]vk.CommandBuffer {
+    const command_buffers = try allocator.alloc(vk.CommandBuffer, count);
+    errdefer allocator.free(command_buffers);
+
+    const command_buffer_info = vk.CommandBufferAllocateInfo{
+        .command_pool = command_pool,
+        .level = .primary,
+        .command_buffer_count = count,
+    };
+    try vkd().allocateCommandBuffers(device, &command_buffer_info, command_buffers.ptr);
+
+    return command_buffers;
+}
+
+fn createCommandPool(device: vk.Device, queue_family_index: u32) !vk.CommandPool {
+    const create_info = vk.CommandPoolCreateInfo{
+        .flags = .{ .reset_command_buffer_bit = true },
+        .queue_family_index = queue_family_index,
+    };
+    return vkd().createCommandPool(device, &create_info, null);
 }
 
 fn createGraphicsPipeline(
