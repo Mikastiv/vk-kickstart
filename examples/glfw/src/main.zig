@@ -74,21 +74,21 @@ pub fn main() !void {
     const device = try vkk.Device.create(allocator, &physical_device, null);
     defer device.destroy();
 
-    const swapchain = try vkk.Swapchain.create(allocator, &device, surface, .{
+    var swapchain = try vkk.Swapchain.create(allocator, &device, surface, .{
         .desired_extent = .{ .width = window_width, .height = window_height },
     });
     defer swapchain.destroy();
 
-    const images = try swapchain.getImages(allocator);
+    var images = try swapchain.getImages(allocator);
     defer allocator.free(images);
 
-    const image_views = try swapchain.getImageViews(allocator, images);
+    var image_views = try swapchain.getImageViews(allocator, images);
     defer swapchain.destroyAndFreeImageViews(allocator, image_views);
 
-    const render_pass = try createRenderPass(device.handle, swapchain.image_format);
+    var render_pass = try createRenderPass(device.handle, swapchain.image_format);
     defer vkd().destroyRenderPass(device.handle, render_pass, null);
 
-    const framebuffers = try createFramebuffers(
+    var framebuffers = try createFramebuffers(
         allocator,
         device.handle,
         swapchain.extent,
@@ -141,8 +141,29 @@ pub fn main() !void {
     defer allocator.free(command_buffers);
 
     var current_frame: u32 = 0;
+    var should_recreate_swapchain = false;
     while (!window.shouldClose()) {
         c.glfwPollEvents();
+
+        if (should_recreate_swapchain) {
+            swapchain = try recreateSwapchain(
+                allocator,
+                &device,
+                window,
+                &swapchain,
+                &images,
+                &image_views,
+                &render_pass,
+                &framebuffers,
+            );
+            should_recreate_swapchain = false;
+        }
+
+        if (window.framebuffer_resized) {
+            should_recreate_swapchain = true;
+            window.framebuffer_resized = false;
+            continue;
+        }
 
         const result = try vkd().waitForFences(
             device.handle,
@@ -161,7 +182,7 @@ pub fn main() !void {
             .null_handle,
         ) catch |err| {
             if (err == error.OutOfDateKHR) {
-                // recreate
+                should_recreate_swapchain = true;
                 continue;
             }
             return err;
@@ -202,24 +223,25 @@ pub fn main() !void {
         );
 
         const indices = [_]u32{image_index};
+        const swapchains = [_]vk.SwapchainKHR{swapchain.handle};
         const present_info = vk.PresentInfoKHR{
             .wait_semaphore_count = signal_semaphores.len,
             .p_wait_semaphores = &signal_semaphores,
-            .swapchain_count = 1,
-            .p_swapchains = @ptrCast(&swapchain.handle),
+            .swapchain_count = swapchains.len,
+            .p_swapchains = &swapchains,
             .p_image_indices = &indices,
         };
 
         const present_result = vkd().queuePresentKHR(device.present_queue, &present_info) catch |err| {
             if (err == error.OutOfDateKHR) {
-                // recreate
+                should_recreate_swapchain = true;
                 continue;
             }
             return err;
         };
 
         if (present_result == .suboptimal_khr) {
-            // recreate
+            should_recreate_swapchain = true;
             continue;
         }
 
@@ -227,6 +249,54 @@ pub fn main() !void {
     }
 
     try vkd().deviceWaitIdle(device.handle);
+}
+
+fn recreateSwapchain(
+    allocator: std.mem.Allocator,
+    device: *const vkk.Device,
+    window: *Window,
+    old_swapchain: *vkk.Swapchain,
+    images: *[]vk.Image,
+    image_views: *[]vk.ImageView,
+    render_pass: *vk.RenderPass,
+    framebuffers: *[]vk.Framebuffer,
+) !vkk.Swapchain {
+    var extent = window.extent();
+    while (extent.width == 0 or extent.height == 0) {
+        extent = window.extent();
+        c.glfwWaitEvents();
+    }
+
+    try vkd().deviceWaitIdle(device.handle);
+
+    const swapchain = try vkk.Swapchain.create(allocator, device, old_swapchain.surface, .{
+        .desired_extent = .{ .width = extent.width, .height = extent.height },
+        .old_swapchain = old_swapchain.handle,
+    });
+
+    old_swapchain.destroyAndFreeImageViews(allocator, image_views.*);
+    old_swapchain.destroy();
+
+    allocator.free(images.*);
+    for (framebuffers.*) |framebuffer| {
+        vkd().destroyFramebuffer(device.handle, framebuffer, null);
+    }
+    allocator.free(framebuffers.*);
+    vkd().destroyRenderPass(device.handle, render_pass.*, null);
+
+    images.* = try swapchain.getImages(allocator);
+    image_views.* = try swapchain.getImageViews(allocator, images.*);
+    render_pass.* = try createRenderPass(device.handle, swapchain.image_format);
+    framebuffers.* = try createFramebuffers(
+        allocator,
+        device.handle,
+        extent,
+        swapchain.image_count,
+        image_views.*,
+        render_pass.*,
+    );
+
+    return swapchain;
 }
 
 fn recordCommandBuffer(
