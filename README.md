@@ -210,9 +210,11 @@ Not all functions are loaded by default. If you need other functions you will ne
 
 In your `main.zig`:
 ```zig
-pub const base_functions = dispatch.base;
-pub const instance_functions = dispatch.instance;
-pub const device_functions = dispatch.device;
+pub const vulkan_dispatch = struct {
+    // pub const base = dispatch.base;
+    pub const instance = dispatch.instance;
+    pub const device = dispatch.device;
+};
 ```
 
 See [dispatch.zig](examples/glfw/src/dispatch.zig) for their definition
@@ -226,4 +228,3 @@ vkd().allocateCommandBuffers();
 
 ## Todo list
 - Headless mode
-- Render triangle in glfw example
