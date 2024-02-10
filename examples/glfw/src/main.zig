@@ -11,7 +11,7 @@ const vkb = vkk.vkb; // Base dispatch
 const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 
-// can override default_functions if more or less Vulkan functions are required
+// can override vulkan dispatch to choose what functions are loaded
 pub const vulkan_dispatch = struct {
     // pub const base = dispatch.base;
     // pub const instance = dispatch.instance;
