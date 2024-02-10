@@ -12,9 +12,11 @@ const vki = vkk.vki; // Instance dispatch
 const vkd = vkk.vkd; // Device dispatch
 
 // can override default_functions if more or less Vulkan functions are required
-// pub const base_functions = dispatch.base;
-// pub const instance_functions = dispatch.instance;
-pub const device_functions = dispatch.device;
+pub const vulkan_dispatch = struct {
+    // pub const base = dispatch.base;
+    // pub const instance = dispatch.instance;
+    pub const device = dispatch.device;
+};
 
 const max_frames_in_flight = 2;
 

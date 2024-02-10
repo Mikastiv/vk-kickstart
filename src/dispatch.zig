@@ -3,9 +3,7 @@ const vk = @import("vulkan-zig");
 const build_options = @import("build_options");
 const root = @import("root");
 
-const base_functions = if (@hasDecl(root, "base_functions")) root.base_functions else default_base_functions;
-const instance_functions = if (@hasDecl(root, "instance_functions")) root.instance_functions else default_instance_functions;
-const device_functions = if (@hasDecl(root, "device_functions")) root.device_functions else default_device_functions;
+const dispatch_override = if (@hasDecl(root, "vulkan_dispatch")) root.vulkan_dispatch else {};
 
 var base_init: bool = false;
 var base: BaseDispatch = undefined;
@@ -56,74 +54,83 @@ pub const BaseDispatch = vk.BaseWrapper(base_functions);
 pub const InstanceDispatch = vk.InstanceWrapper(instance_functions);
 pub const DeviceDispatch = vk.DeviceWrapper(device_functions);
 
-const default_base_functions = vk.BaseCommandFlags{
-    .createInstance = true,
-    .getInstanceProcAddr = true,
-    .enumerateInstanceVersion = true,
-    .enumerateInstanceLayerProperties = true,
-    .enumerateInstanceExtensionProperties = true,
-};
+const base_functions = if (@hasDecl(dispatch_override, "base"))
+    dispatch_override.base
+else
+    vk.BaseCommandFlags{
+        .createInstance = true,
+        .getInstanceProcAddr = true,
+        .enumerateInstanceVersion = true,
+        .enumerateInstanceLayerProperties = true,
+        .enumerateInstanceExtensionProperties = true,
+    };
 
-const default_instance_functions = vk.InstanceCommandFlags{
-    .destroyInstance = true,
-    .createDevice = true,
-    .enumeratePhysicalDevices = true,
-    .enumerateDeviceLayerProperties = true,
-    .enumerateDeviceExtensionProperties = true,
-    .getDeviceProcAddr = true,
-    .getPhysicalDeviceProperties = true,
-    .getPhysicalDeviceQueueFamilyProperties = true,
-    .getPhysicalDeviceMemoryProperties = true,
-    .getPhysicalDeviceFeatures = true,
-    .getPhysicalDeviceSurfaceSupportKHR = true,
-    .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
-    .getPhysicalDeviceSurfaceFormatsKHR = true,
-    .getPhysicalDeviceSurfacePresentModesKHR = true,
-    .getPhysicalDeviceImageFormatProperties = true,
-    .createDebugUtilsMessengerEXT = true,
-    .destroyDebugUtilsMessengerEXT = true,
-    .destroySurfaceKHR = true,
-    .getPhysicalDeviceFeatures2 = true,
-};
+const instance_functions = if (@hasDecl(dispatch_override, "instance"))
+    dispatch_override.instance
+else
+    vk.InstanceCommandFlags{
+        .destroyInstance = true,
+        .createDevice = true,
+        .enumeratePhysicalDevices = true,
+        .enumerateDeviceLayerProperties = true,
+        .enumerateDeviceExtensionProperties = true,
+        .getDeviceProcAddr = true,
+        .getPhysicalDeviceProperties = true,
+        .getPhysicalDeviceQueueFamilyProperties = true,
+        .getPhysicalDeviceMemoryProperties = true,
+        .getPhysicalDeviceFeatures = true,
+        .getPhysicalDeviceSurfaceSupportKHR = true,
+        .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
+        .getPhysicalDeviceSurfaceFormatsKHR = true,
+        .getPhysicalDeviceSurfacePresentModesKHR = true,
+        .getPhysicalDeviceImageFormatProperties = true,
+        .createDebugUtilsMessengerEXT = true,
+        .destroyDebugUtilsMessengerEXT = true,
+        .destroySurfaceKHR = true,
+        .getPhysicalDeviceFeatures2 = true,
+    };
 
-const default_device_functions = vk.DeviceCommandFlags{
-    .destroyDevice = true,
-    .getDeviceQueue = true,
-    .createSwapchainKHR = true,
-    .destroySwapchainKHR = true,
-    .getSwapchainImagesKHR = true,
-    .createImageView = true,
-    .destroyImageView = true,
-    .createRenderPass = true,
-    .destroyRenderPass = true,
-    .createFramebuffer = true,
-    .destroyFramebuffer = true,
-    .createSemaphore = true,
-    .destroySemaphore = true,
-    .createFence = true,
-    .destroyFence = true,
-    .createShaderModule = true,
-    .destroyShaderModule = true,
-    .createPipelineLayout = true,
-    .destroyPipelineLayout = true,
-    .createGraphicsPipelines = true,
-    .destroyPipeline = true,
-    .createCommandPool = true,
-    .destroyCommandPool = true,
-    .allocateCommandBuffers = true,
-    .freeCommandBuffers = true,
-    .beginCommandBuffer = true,
-    .waitForFences = true,
-    .deviceWaitIdle = true,
-    .resetFences = true,
-    .acquireNextImageKHR = true,
-    .queueSubmit = true,
-    .queuePresentKHR = true,
-    .endCommandBuffer = true,
-    .cmdBeginRenderPass = true,
-    .cmdSetViewport = true,
-    .cmdSetScissor = true,
-    .cmdBindPipeline = true,
-    .cmdDraw = true,
-    .cmdEndRenderPass = true,
-};
+const device_functions = if (@hasDecl(dispatch_override, "device"))
+    dispatch_override.device
+else
+    vk.DeviceCommandFlags{
+        .destroyDevice = true,
+        .getDeviceQueue = true,
+        .createSwapchainKHR = true,
+        .destroySwapchainKHR = true,
+        .getSwapchainImagesKHR = true,
+        .createImageView = true,
+        .destroyImageView = true,
+        .createRenderPass = true,
+        .destroyRenderPass = true,
+        .createFramebuffer = true,
+        .destroyFramebuffer = true,
+        .createSemaphore = true,
+        .destroySemaphore = true,
+        .createFence = true,
+        .destroyFence = true,
+        .createShaderModule = true,
+        .destroyShaderModule = true,
+        .createPipelineLayout = true,
+        .destroyPipelineLayout = true,
+        .createGraphicsPipelines = true,
+        .destroyPipeline = true,
+        .createCommandPool = true,
+        .destroyCommandPool = true,
+        .allocateCommandBuffers = true,
+        .freeCommandBuffers = true,
+        .beginCommandBuffer = true,
+        .waitForFences = true,
+        .deviceWaitIdle = true,
+        .resetFences = true,
+        .acquireNextImageKHR = true,
+        .queueSubmit = true,
+        .queuePresentKHR = true,
+        .endCommandBuffer = true,
+        .cmdBeginRenderPass = true,
+        .cmdSetViewport = true,
+        .cmdSetScissor = true,
+        .cmdBindPipeline = true,
+        .cmdDraw = true,
+        .cmdEndRenderPass = true,
+    };
