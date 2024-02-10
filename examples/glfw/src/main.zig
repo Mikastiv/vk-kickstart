@@ -24,6 +24,12 @@ const SyncObjects = struct {
     in_flight_fences: [max_frames_in_flight]vk.Fence,
 };
 
+const FrameSyncObjects = struct {
+    image_available_semaphore: vk.Semaphore,
+    render_finished_semaphore: vk.Semaphore,
+    in_flight_fence: vk.Fence,
+};
+
 fn errorCallback(error_code: i32, description: [*c]const u8) callconv(.C) void {
     std.log.err("glfw: {}: {s}\n", .{ error_code, description });
 }
@@ -85,36 +91,14 @@ pub fn main() !void {
     var image_views = try swapchain.getImageViews(allocator, images);
     defer swapchain.destroyAndFreeImageViews(allocator, image_views);
 
-    var render_pass = try createRenderPass(device.handle, swapchain.image_format);
+    const render_pass = try createRenderPass(device.handle, swapchain.image_format);
     defer vkd().destroyRenderPass(device.handle, render_pass, null);
 
-    var framebuffers = try createFramebuffers(
-        allocator,
-        device.handle,
-        swapchain.extent,
-        swapchain.image_count,
-        image_views,
-        render_pass,
-    );
-    defer {
-        for (framebuffers) |framebuffer| {
-            vkd().destroyFramebuffer(device.handle, framebuffer, null);
-        }
-        allocator.free(framebuffers);
-    }
+    var framebuffers = try createFramebuffers(allocator, device.handle, swapchain.extent, swapchain.image_count, image_views, render_pass);
+    defer destroyFramebuffers(allocator, device.handle, framebuffers);
 
     const sync = try createSyncObjects(device.handle);
-    defer {
-        for (sync.image_available_semaphores) |semaphore| {
-            vkd().destroySemaphore(device.handle, semaphore, null);
-        }
-        for (sync.render_finished_semaphores) |semaphore| {
-            vkd().destroySemaphore(device.handle, semaphore, null);
-        }
-        for (sync.in_flight_fences) |fence| {
-            vkd().destroyFence(device.handle, fence, null);
-        }
-    }
+    defer destroySyncObjects(device.handle, sync);
 
     const vertex_shader = try createShaderModule(device.handle, &Shaders.shader_vert);
     defer vkd().destroyShaderModule(device.handle, vertex_shader, null);
@@ -125,13 +109,7 @@ pub fn main() !void {
     const pipeline_layout = try vkd().createPipelineLayout(device.handle, &pipeline_layout_info, null);
     defer vkd().destroyPipelineLayout(device.handle, pipeline_layout, null);
 
-    const pipeline = try createGraphicsPipeline(
-        device.handle,
-        render_pass,
-        vertex_shader,
-        fragment_shader,
-        pipeline_layout,
-    );
+    const pipeline = try createGraphicsPipeline(device.handle, render_pass, vertex_shader, fragment_shader, pipeline_layout);
     defer vkd().destroyPipeline(device.handle, pipeline, null);
 
     const command_pool = try createCommandPool(device.handle, device.physical_device.graphics_family_index);
@@ -153,7 +131,7 @@ pub fn main() !void {
                 &swapchain,
                 &images,
                 &image_views,
-                &render_pass,
+                render_pass,
                 &framebuffers,
             );
             should_recreate_swapchain = false;
@@ -165,13 +143,7 @@ pub fn main() !void {
             continue;
         }
 
-        const result = try vkd().waitForFences(
-            device.handle,
-            1,
-            @ptrCast(&sync.in_flight_fences[current_frame]),
-            vk.TRUE,
-            std.math.maxInt(u64),
-        );
+        const result = try vkd().waitForFences(device.handle, 1, @ptrCast(&sync.in_flight_fences[current_frame]), vk.TRUE, std.math.maxInt(u64));
         std.debug.assert(result == .success);
 
         const next_image_result = vkd().acquireNextImageKHR(
@@ -190,57 +162,14 @@ pub fn main() !void {
         std.debug.assert(next_image_result.result == .success);
 
         const image_index = next_image_result.image_index;
-        try recordCommandBuffer(
-            command_buffers[current_frame],
-            pipeline,
-            render_pass,
-            framebuffers[image_index],
-            swapchain.extent,
-        );
+        try recordCommandBuffer(command_buffers[current_frame], pipeline, render_pass, framebuffers[image_index], swapchain.extent);
 
-        const wait_semaphores = [_]vk.Semaphore{sync.image_available_semaphores[current_frame]};
-        const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
-        const signal_semaphores = [_]vk.Semaphore{sync.render_finished_semaphores[current_frame]};
-        const submit_info = vk.SubmitInfo{
-            .wait_semaphore_count = wait_semaphores.len,
-            .p_wait_semaphores = &wait_semaphores,
-            .p_wait_dst_stage_mask = &wait_stages,
-            .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast(&command_buffers[current_frame]),
-            .signal_semaphore_count = signal_semaphores.len,
-            .p_signal_semaphores = &signal_semaphores,
+        const frame_sync_objects = FrameSyncObjects{
+            .image_available_semaphore = sync.image_available_semaphores[current_frame],
+            .render_finished_semaphore = sync.render_finished_semaphores[current_frame],
+            .in_flight_fence = sync.in_flight_fences[current_frame],
         };
-
-        const fences = [_]vk.Fence{sync.in_flight_fences[current_frame]};
-        try vkd().resetFences(device.handle, fences.len, &fences);
-
-        const submits = [_]vk.SubmitInfo{submit_info};
-        try vkd().queueSubmit(
-            device.graphics_queue,
-            submits.len,
-            &submits,
-            sync.in_flight_fences[current_frame],
-        );
-
-        const indices = [_]u32{image_index};
-        const swapchains = [_]vk.SwapchainKHR{swapchain.handle};
-        const present_info = vk.PresentInfoKHR{
-            .wait_semaphore_count = signal_semaphores.len,
-            .p_wait_semaphores = &signal_semaphores,
-            .swapchain_count = swapchains.len,
-            .p_swapchains = &swapchains,
-            .p_image_indices = &indices,
-        };
-
-        const present_result = vkd().queuePresentKHR(device.present_queue, &present_info) catch |err| {
-            if (err == error.OutOfDateKHR) {
-                should_recreate_swapchain = true;
-                continue;
-            }
-            return err;
-        };
-
-        if (present_result == .suboptimal_khr) {
+        if (!try drawFrame(&device, command_buffers[current_frame], frame_sync_objects, swapchain.handle, image_index)) {
             should_recreate_swapchain = true;
             continue;
         }
@@ -251,6 +180,57 @@ pub fn main() !void {
     try vkd().deviceWaitIdle(device.handle);
 }
 
+fn drawFrame(
+    device: *const vkk.Device,
+    command_buffer: vk.CommandBuffer,
+    sync: FrameSyncObjects,
+    swapchain: vk.SwapchainKHR,
+    image_index: u32,
+) !bool {
+    const wait_semaphores = [_]vk.Semaphore{sync.image_available_semaphore};
+    const wait_stages = [_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }};
+    const signal_semaphores = [_]vk.Semaphore{sync.render_finished_semaphore};
+    const command_buffers = [_]vk.CommandBuffer{command_buffer};
+    const submit_info = vk.SubmitInfo{
+        .wait_semaphore_count = wait_semaphores.len,
+        .p_wait_semaphores = &wait_semaphores,
+        .p_wait_dst_stage_mask = &wait_stages,
+        .command_buffer_count = command_buffers.len,
+        .p_command_buffers = &command_buffers,
+        .signal_semaphore_count = signal_semaphores.len,
+        .p_signal_semaphores = &signal_semaphores,
+    };
+
+    const fences = [_]vk.Fence{sync.in_flight_fence};
+    try vkd().resetFences(device.handle, fences.len, &fences);
+
+    const submits = [_]vk.SubmitInfo{submit_info};
+    try vkd().queueSubmit(device.graphics_queue, submits.len, &submits, sync.in_flight_fence);
+
+    const indices = [_]u32{image_index};
+    const swapchains = [_]vk.SwapchainKHR{swapchain};
+    const present_info = vk.PresentInfoKHR{
+        .wait_semaphore_count = signal_semaphores.len,
+        .p_wait_semaphores = &signal_semaphores,
+        .swapchain_count = swapchains.len,
+        .p_swapchains = &swapchains,
+        .p_image_indices = &indices,
+    };
+
+    const present_result = vkd().queuePresentKHR(device.present_queue, &present_info) catch |err| {
+        if (err == error.OutOfDateKHR) {
+            return false;
+        }
+        return err;
+    };
+
+    if (present_result == .suboptimal_khr) {
+        return false;
+    }
+
+    return true;
+}
+
 fn recreateSwapchain(
     allocator: std.mem.Allocator,
     device: *const vkk.Device,
@@ -258,7 +238,7 @@ fn recreateSwapchain(
     old_swapchain: *vkk.Swapchain,
     images: *[]vk.Image,
     image_views: *[]vk.ImageView,
-    render_pass: *vk.RenderPass,
+    render_pass: vk.RenderPass,
     framebuffers: *[]vk.Framebuffer,
 ) !vkk.Swapchain {
     var extent = window.extent();
@@ -278,25 +258,39 @@ fn recreateSwapchain(
     old_swapchain.destroy();
 
     allocator.free(images.*);
-    for (framebuffers.*) |framebuffer| {
-        vkd().destroyFramebuffer(device.handle, framebuffer, null);
-    }
-    allocator.free(framebuffers.*);
-    vkd().destroyRenderPass(device.handle, render_pass.*, null);
+    destroyFramebuffers(allocator, device.handle, framebuffers.*);
 
     images.* = try swapchain.getImages(allocator);
     image_views.* = try swapchain.getImageViews(allocator, images.*);
-    render_pass.* = try createRenderPass(device.handle, swapchain.image_format);
     framebuffers.* = try createFramebuffers(
         allocator,
         device.handle,
         extent,
         swapchain.image_count,
         image_views.*,
-        render_pass.*,
+        render_pass,
     );
 
     return swapchain;
+}
+
+fn destroyFramebuffers(allocator: std.mem.Allocator, device: vk.Device, framebuffers: []const vk.Framebuffer) void {
+    for (framebuffers) |framebuffer| {
+        vkd().destroyFramebuffer(device, framebuffer, null);
+    }
+    allocator.free(framebuffers);
+}
+
+fn destroySyncObjects(device: vk.Device, sync: SyncObjects) void {
+    for (sync.image_available_semaphores) |semaphore| {
+        vkd().destroySemaphore(device, semaphore, null);
+    }
+    for (sync.render_finished_semaphores) |semaphore| {
+        vkd().destroySemaphore(device, semaphore, null);
+    }
+    for (sync.in_flight_fences) |fence| {
+        vkd().destroyFence(device, fence, null);
+    }
 }
 
 fn recordCommandBuffer(
