@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
         .registry = xml_path,
         // can overwrite the default settings for validation layers and debug callback
         // .enable_validation = false, // default: true for .Debug else false
-        // .verbose = true, // enable debug output; it uses std.log.debug so it only print when compiling with .Debug
+        // .verbose = true, // enable debug output; it uses std.log.debug so it only prints when compiling with .Debug
     });
 
     exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));

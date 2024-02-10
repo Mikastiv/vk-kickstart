@@ -51,7 +51,7 @@ There are two more build options that are optional:
 const kickstart_dep = b.dependency("vk_kickstart", .{
     // Enables debug layers and debug messenger
     .enable_validation = true, // By default this is true when compiling in .Debug mode
-    // Enables debug output
+    // Enables debug output (uses std.log.debug to print)
     .verbose = true, // False by default
 });
 ```
