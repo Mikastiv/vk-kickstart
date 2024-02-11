@@ -13,10 +13,15 @@ const vki = dispatch.vki;
 
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
-const DebugMessenger = if (build_options.enable_validation) vk.DebugUtilsMessengerEXT else void;
-const DebugCallback = if (build_options.enable_validation) vk.PfnDebugUtilsMessengerCallbackEXT else void;
-const DebugMessageSeverity = if (build_options.enable_validation) vk.DebugUtilsMessageSeverityFlagsEXT else void;
-const DebugMessageType = if (build_options.enable_validation) vk.DebugUtilsMessageTypeFlagsEXT else void;
+handle: vk.Instance,
+allocation_callbacks: ?*const vk.AllocationCallbacks,
+debug_messenger: DebugMessenger,
+api_version: u32,
+
+pub const DebugMessenger = if (build_options.enable_validation) vk.DebugUtilsMessengerEXT else void;
+pub const DebugCallback = if (build_options.enable_validation) vk.PfnDebugUtilsMessengerCallbackEXT else void;
+pub const DebugMessageSeverity = if (build_options.enable_validation) vk.DebugUtilsMessageSeverityFlagsEXT else void;
+pub const DebugMessageType = if (build_options.enable_validation) vk.DebugUtilsMessageTypeFlagsEXT else void;
 
 const default_debug_callback = if (build_options.enable_validation) defaultDebugMessageCallback else {};
 const default_message_severity = if (build_options.enable_validation) .{
@@ -28,11 +33,6 @@ const default_message_type = if (build_options.enable_validation) .{
     .validation_bit_ext = true,
     .performance_bit_ext = true,
 } else {};
-
-handle: vk.Instance,
-allocation_callbacks: ?*const vk.AllocationCallbacks,
-debug_messenger: DebugMessenger,
-api_version: u32,
 
 pub const CreateOptions = struct {
     /// Application name
