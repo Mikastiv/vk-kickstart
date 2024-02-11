@@ -4,12 +4,17 @@ const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const Instance = @import("Instance.zig");
 const mem = std.mem;
+const root = @import("root");
 
 const log = std.log.scoped(.vk_kickstart);
 
 const vki = dispatch.vki;
 
-pub const max_extensions = 32;
+/// Max number of enabled physical device extensions
+pub const max_extensions = if (@hasDecl(root, "physical_device_max_extensions"))
+    root.physical_device_max_extensions
+else
+    32;
 
 instance_version: u32,
 handle: vk.PhysicalDevice,
