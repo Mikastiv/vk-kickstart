@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
     const kickstart_dep = b.dependency("vk_kickstart", .{
         .registry = xml_path,
         // .enable_validation = false,
-        // .verbose = true,
+        .verbose = true,
     });
 
     exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));

@@ -5,8 +5,8 @@ const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
 const mem = std.mem;
 
-const log = std.log.scoped(.vk_kickstart);
-const vk_log = std.log.scoped(.vulkan);
+const log = @import("log.zig").vk_kickstart_log;
+const vk_log = @import("log.zig").vulkan_log;
 
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;

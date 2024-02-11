@@ -6,7 +6,7 @@ const Instance = @import("Instance.zig");
 const mem = std.mem;
 const root = @import("root");
 
-const log = std.log.scoped(.vk_kickstart);
+const log = @import("log.zig").vk_kickstart_log;
 
 const vki = dispatch.vki;
 

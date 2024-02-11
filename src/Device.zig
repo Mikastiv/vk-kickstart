@@ -5,7 +5,7 @@ const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
 
-const log = std.log.scoped(.vk_kickstart);
+const log = @import("log.zig").vk_kickstart_log;
 
 const vki = dispatch.vki;
 const vkd = dispatch.vkd;
