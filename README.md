@@ -38,6 +38,8 @@ exe.root_module.addImport("vulkan", vkzig_dep.module("vulkan-zig"));
 
 // Add vk-kickstart
 const kickstart_dep = b.dependency("vk_kickstart", .{
+    .target = target,
+    .optimize = optimize, // Pass through optimize mode for enable_validation's default
     .registry = xml_path,
     // Optional
     .enable_validation = true, // By default this is true when compiling in .Debug mode
