@@ -169,7 +169,7 @@ fn defaultDebugMessageCallback(
     _: ?*anyopaque,
 ) callconv(vk.vulkan_call_conv) vk.Bool32 {
     if (p_callback_data) |data| {
-        const format = "{s}\n";
+        const format = "{?s}\n";
 
         if (severity.error_bit_ext) {
             vk_log.err(format, .{data.p_message});
