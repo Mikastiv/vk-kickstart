@@ -84,8 +84,8 @@ else
         .getPhysicalDeviceSurfaceFormatsKHR = true,
         .getPhysicalDeviceSurfacePresentModesKHR = true,
         .getPhysicalDeviceImageFormatProperties = true,
-        .createDebugUtilsMessengerEXT = true,
-        .destroyDebugUtilsMessengerEXT = true,
+        .createDebugUtilsMessengerEXT = if (build_options.enable_validation) true else false,
+        .destroyDebugUtilsMessengerEXT = if (build_options.enable_validation) true else false,
         .destroySurfaceKHR = true,
         .getPhysicalDeviceFeatures2 = true,
     };

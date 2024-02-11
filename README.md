@@ -101,6 +101,8 @@ pub const CreateOptions = struct {
     debug_message_severity: DebugMessageSeverity = default_message_severity,
     /// Debug message type filter
     debug_message_type: DebugMessageType = default_message_type,
+    /// Debug user data pointer
+    debug_user_data: ?*anyopaque = null,
 };
 ```
 

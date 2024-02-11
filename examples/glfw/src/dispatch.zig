@@ -1,27 +1,5 @@
 const vk = @import("vulkan-zig");
 
-pub const instance = vk.InstanceCommandFlags{
-    .destroyInstance = true,
-    .createDevice = true,
-    .enumeratePhysicalDevices = true,
-    .enumerateDeviceLayerProperties = true,
-    .enumerateDeviceExtensionProperties = true,
-    .getDeviceProcAddr = true,
-    .getPhysicalDeviceProperties = true,
-    .getPhysicalDeviceQueueFamilyProperties = true,
-    .getPhysicalDeviceMemoryProperties = true,
-    .getPhysicalDeviceFeatures = true,
-    .getPhysicalDeviceSurfaceSupportKHR = true,
-    .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
-    .getPhysicalDeviceSurfaceFormatsKHR = true,
-    .getPhysicalDeviceSurfacePresentModesKHR = true,
-    .getPhysicalDeviceImageFormatProperties = true,
-    .createDebugUtilsMessengerEXT = true,
-    .destroyDebugUtilsMessengerEXT = true,
-    .destroySurfaceKHR = true,
-    .getPhysicalDeviceFeatures2 = true,
-};
-
 pub const device = vk.DeviceCommandFlags{
     .destroyDevice = true,
     .getDeviceQueue = true,

@@ -58,6 +58,8 @@ pub const CreateOptions = struct {
     debug_message_severity: DebugMessageSeverity = default_message_severity,
     /// Debug message type filter
     debug_message_type: DebugMessageType = default_message_type,
+    /// Debug user data pointer
+    debug_user_data: ?*anyopaque = null,
 };
 
 pub fn create(allocator: mem.Allocator, loader: anytype, options: CreateOptions) !@This() {
@@ -98,6 +100,7 @@ pub fn create(allocator: mem.Allocator, loader: anytype, options: CreateOptions)
         .message_severity = options.debug_message_severity,
         .message_type = options.debug_message_type,
         .pfn_user_callback = options.debug_callback,
+        .p_user_data = options.debug_user_data,
     } else null;
 
     const instance_info = vk.InstanceCreateInfo{
@@ -118,6 +121,8 @@ pub fn create(allocator: mem.Allocator, loader: anytype, options: CreateOptions)
             vk.apiVersionMinor(api_version),
             vk.apiVersionPatch(api_version),
         });
+
+        log.debug("validation layers: {s}", .{if (build_options.enable_validation) "enabled" else "disabled"});
 
         log.debug("available extensions:", .{});
         for (available_extensions) |ext| {
@@ -191,6 +196,7 @@ fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !DebugMes
         .message_severity = options.debug_message_severity,
         .message_type = options.debug_message_type,
         .pfn_user_callback = options.debug_callback,
+        .p_user_data = options.debug_user_data,
     };
 
     return vki().createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
