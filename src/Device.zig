@@ -62,9 +62,11 @@ pub fn create(
         log.debug("enabled features (vulkan 1.1):", .{});
         printEnabledFeatures(vk.PhysicalDeviceVulkan11Features, features_11);
         if (physical_device.properties.api_version >= vk.API_VERSION_1_2) {
+            log.debug("enabled features (vulkan 1.2):", .{});
             printEnabledFeatures(vk.PhysicalDeviceVulkan12Features, features_12);
         }
         if (physical_device.properties.api_version >= vk.API_VERSION_1_3) {
+            log.debug("enabled features (vulkan 1.3):", .{});
             printEnabledFeatures(vk.PhysicalDeviceVulkan13Features, features_13);
         }
     }
