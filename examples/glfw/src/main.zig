@@ -174,7 +174,6 @@ pub fn main() !void {
         };
         if (!try drawFrame(&device, command_buffers[current_frame], frame_sync_objects, swapchain.handle, image_index)) {
             should_recreate_swapchain = true;
-            continue;
         }
 
         current_frame = (current_frame + 1) % max_frames_in_flight;
