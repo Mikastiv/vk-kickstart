@@ -6,6 +6,7 @@ const dispatch = @import("dispatch.zig");
 const mem = std.mem;
 
 const log = std.log.scoped(.vk_kickstart);
+const vk_log = std.log.scoped(.vulkan);
 
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
@@ -171,13 +172,13 @@ fn defaultDebugMessageCallback(
         const format = "{s}\n";
 
         if (severity.error_bit_ext) {
-            log.err(format, .{data.p_message});
+            vk_log.err(format, .{data.p_message});
         } else if (severity.warning_bit_ext) {
-            log.warn(format, .{data.p_message});
+            vk_log.warn(format, .{data.p_message});
         } else if (severity.info_bit_ext) {
-            log.info(format, .{data.p_message});
+            vk_log.info(format, .{data.p_message});
         } else {
-            log.debug(format, .{data.p_message});
+            vk_log.debug(format, .{data.p_message});
         }
     }
     return vk.FALSE;
