@@ -19,10 +19,8 @@ pub fn build(b: *std.Build) void {
     });
 
     const kickstart_dep = b.dependency("vk_kickstart", .{
-        .target = target,
-        .optimize = optimize,
         .registry = xml_path,
-        // .enable_validation = false,
+        .enable_validation = if (optimize == .Debug) true else false,
         .verbose = true,
     });
 

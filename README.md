@@ -38,11 +38,10 @@ exe.root_module.addImport("vulkan", vkzig_dep.module("vulkan-zig"));
 
 // Add vk-kickstart
 const kickstart_dep = b.dependency("vk_kickstart", .{
-    .target = target,
-    .optimize = optimize, // Pass through optimize mode for enable_validation's default
     .registry = xml_path,
-    // Optional
-    .enable_validation = true, // By default this is true when compiling in .Debug mode
+    // Optional, default is false
+    .enable_validation = if (optimize == .Debug) true else false,
+    // Optional, default is false
     .verbose = true, // False by default
 });
 exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
@@ -51,8 +50,8 @@ exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
 There are two more build options that are optional:
 ```zig
 const kickstart_dep = b.dependency("vk_kickstart", .{
-    // Enables debug layers and debug messenger
-    .enable_validation = true, // By default this is true when compiling in .Debug mode
+    // Enables validation layers and debug messenger
+    .enable_validation = if (optimize == .Debug) true else false,
     // Enables debug output
     .verbose = true, // False by default
 });

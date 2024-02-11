@@ -4,17 +4,12 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const default_validation = switch (optimize) {
-        .Debug => true,
-        else => false,
-    };
-
     const registry = b.option([]const u8, "registry", "Path to the Vulkan registry") orelse @panic("provide path to the Vulkan registry");
     const enable_validation = b.option(bool, "enable_validation", "Enable vulkan validation layers");
     const verbose = b.option(bool, "verbose", "Enable debug output");
 
     const build_options = b.addOptions();
-    build_options.addOption(bool, "enable_validation", enable_validation orelse default_validation);
+    build_options.addOption(bool, "enable_validation", enable_validation orelse false);
     build_options.addOption(bool, "verbose", verbose orelse false);
 
     const vkzig_dep = b.dependency("vulkan_zig", .{
