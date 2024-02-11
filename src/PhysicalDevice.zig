@@ -11,10 +11,12 @@ const log = @import("log.zig").vk_kickstart_log;
 const vki = dispatch.vki;
 
 /// Max number of enabled physical device extensions
+///
+/// Can be overriden in root
 pub const max_extensions = if (@hasDecl(root, "physical_device_max_extensions"))
     root.physical_device_max_extensions
 else
-    32;
+    16;
 
 instance_version: u32,
 handle: vk.PhysicalDevice,
@@ -219,6 +221,8 @@ pub fn name(self: *const @This()) []const u8 {
 }
 
 /// Returns an array of the extensions required to be enabled when creating the logical device
+///
+/// Caller owns the memory
 pub fn requiredExtensions(self: *const @This(), allocator: mem.Allocator) ![][*:0]const u8 {
     const slice = try allocator.alloc([*:0]const u8, self.extension_count);
     for (slice, 0..) |*ptr, i| {
