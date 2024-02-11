@@ -61,7 +61,8 @@ pub fn main() !void {
     const surface = try window.createSurface(instance.handle);
     defer vki().destroySurfaceKHR(instance.handle, surface, instance.allocation_callbacks);
 
-    const physical_device = try vkk.PhysicalDevice.select(allocator, &instance, surface, .{
+    const physical_device = try vkk.PhysicalDevice.select(allocator, &instance, .{
+        .surface = surface,
         .transfer_queue = .dedicated,
         .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{

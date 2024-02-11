@@ -45,6 +45,8 @@ pub const QueuePreference = enum {
 };
 
 pub const SelectOptions = struct {
+    /// Vulkan render surface
+    surface: vk.SurfaceKHR,
     /// Name of the device to select
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1)
@@ -73,7 +75,6 @@ pub const SelectOptions = struct {
 pub fn select(
     allocator: mem.Allocator,
     instance: *const Instance,
-    surface: vk.SurfaceKHR,
     options: SelectOptions,
 ) !@This() {
     std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
@@ -95,15 +96,15 @@ pub fn select(
         physical_device_infos.deinit();
     }
 
-    std.debug.assert(surface != .null_handle);
+    std.debug.assert(options.surface != .null_handle);
 
     for (physical_device_handles) |handle| {
-        const physical_device = try getPhysicalDeviceInfo(allocator, handle, surface, instance.api_version);
+        const physical_device = try getPhysicalDeviceInfo(allocator, handle, options.surface, instance.api_version);
         try physical_device_infos.append(physical_device);
     }
 
     for (physical_device_infos.items) |*info| {
-        info.suitable = try isDeviceSuitable(info, surface, options);
+        info.suitable = try isDeviceSuitable(info, options.surface, options);
     }
 
     if (build_options.verbose) {
@@ -187,7 +188,7 @@ pub fn select(
     return .{
         .instance_version = instance.api_version,
         .handle = selected.handle,
-        .surface = surface,
+        .surface = options.surface,
         .features = options.required_features,
         .features_11 = options.required_features_11,
         .features_12 = if (options.required_features_12) |features| features else .{},

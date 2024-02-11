@@ -116,6 +116,8 @@ Note: VK_KHR_subset (if available) and VK_KHR_swapchain are automatically enable
 const vk = @import("vulkan-zig");
 
 pub const SelectOptions = struct {
+    /// Vulkan render surface
+    surface: vk.SurfaceKHR,
     /// Name of the device to select
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1)
@@ -142,7 +144,7 @@ pub const SelectOptions = struct {
 };
 ```
 
-Pass these options and a vk.SurfaceKHR to `PhysicalDevice.select()` to select a device
+Pass these options to `PhysicalDevice.select()` to select a device
 
 ### Device creation
 
