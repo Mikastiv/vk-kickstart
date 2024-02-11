@@ -21,7 +21,7 @@ extent: vk.Extent2D,
 present_mode: vk.PresentModeKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 
-pub const Config = struct {
+pub const CreateOptions = struct {
     /// Desired size (in pixels) of the swapchain image(s)
     /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
@@ -62,7 +62,7 @@ pub fn create(
     allocator: mem.Allocator,
     device: *const Device,
     surface: vk.SurfaceKHR,
-    config: Config,
+    options: CreateOptions,
 ) !@This() {
     std.debug.assert(surface != .null_handle);
 
@@ -72,20 +72,20 @@ pub fn create(
         allocator.free(surface_support.present_modes);
     }
 
-    const image_count = selectMinImageCount(&surface_support.capabilities, config.desired_min_image_count);
-    const format = pickSurfaceFormat(surface_support.formats, config.desired_formats);
-    const present_mode = pickPresentMode(surface_support.present_modes, config.desired_present_modes);
-    const extent = pickExtent(&surface_support.capabilities, config.desired_extent);
+    const image_count = selectMinImageCount(&surface_support.capabilities, options.desired_min_image_count);
+    const format = pickSurfaceFormat(surface_support.formats, options.desired_formats);
+    const present_mode = pickPresentMode(surface_support.present_modes, options.desired_present_modes);
+    const extent = pickExtent(&surface_support.capabilities, options.desired_extent);
 
-    const array_layer_count = if (surface_support.capabilities.max_image_array_layers < config.desired_array_layer_count)
+    const array_layer_count = if (surface_support.capabilities.max_image_array_layers < options.desired_array_layer_count)
         surface_support.capabilities.max_image_array_layers
     else
-        config.desired_array_layer_count;
+        options.desired_array_layer_count;
 
     if (isSharedPresentMode(present_mode)) {
         // TODO: Shared present modes check
     } else {
-        if (!config.image_usage_flags.contains(surface_support.capabilities.supported_usage_flags))
+        if (!options.image_usage_flags.contains(surface_support.capabilities.supported_usage_flags))
             return error.UsageFlagsNotSupported;
     }
 
@@ -97,22 +97,22 @@ pub fn create(
     // NOTE: lookup p_next extensions
 
     const swapchain_info = vk.SwapchainCreateInfoKHR{
-        .flags = config.create_flags,
+        .flags = options.create_flags,
         .surface = surface,
         .min_image_count = image_count,
         .image_format = format.format,
         .image_color_space = format.color_space,
         .image_extent = extent,
         .image_array_layers = array_layer_count,
-        .image_usage = config.image_usage_flags,
+        .image_usage = options.image_usage_flags,
         .image_sharing_mode = if (same_index) .exclusive else .concurrent,
         .queue_family_index_count = if (same_index) 0 else @intCast(queue_family_indices.len),
         .p_queue_family_indices = if (same_index) null else @ptrCast(&queue_family_indices),
-        .pre_transform = if (config.pre_transform) |pre_transform| pre_transform else surface_support.capabilities.current_transform,
-        .composite_alpha = config.composite_alpha,
+        .pre_transform = if (options.pre_transform) |pre_transform| pre_transform else surface_support.capabilities.current_transform,
+        .composite_alpha = options.composite_alpha,
         .present_mode = present_mode,
-        .clipped = config.clipped,
-        .old_swapchain = if (config.old_swapchain) |old| old else .null_handle,
+        .clipped = options.clipped,
+        .old_swapchain = if (options.old_swapchain) |old| old else .null_handle,
     };
 
     if (build_options.verbose) {
@@ -124,8 +124,8 @@ pub fn create(
         log.debug("extent: {d}x{d}", .{ extent.width, extent.height });
     }
 
-    const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, config.allocation_callbacks);
-    errdefer vkd().destroySwapchainKHR(device.handle, swapchain, config.allocation_callbacks);
+    const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, options.allocation_callbacks);
+    errdefer vkd().destroySwapchainKHR(device.handle, swapchain, options.allocation_callbacks);
 
     return .{
         .device = device.handle,
@@ -135,9 +135,9 @@ pub fn create(
         .image_format = format.format,
         .color_space = format.color_space,
         .extent = extent,
-        .image_usage = config.image_usage_flags,
+        .image_usage = options.image_usage_flags,
         .present_mode = present_mode,
-        .allocation_callbacks = config.allocation_callbacks,
+        .allocation_callbacks = options.allocation_callbacks,
     };
 }
 

@@ -70,14 +70,14 @@ For a code example, see [main.zig](examples/glfw/src/main.zig)
 
 ### Instance creation
 
-Using the `Instance.Config` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
+Using the `Instance.CreateOptions` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
 
 Note: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
 
 ```zig
 const vk = @import("vulkan-zig");
 
-pub const Config = struct {
+pub const CreateOptions = struct {
     /// Application name
     app_name: [*:0]const u8 = "",
     /// Application version
@@ -104,18 +104,18 @@ pub const Config = struct {
 };
 ```
 
-Pass these configs to `Instance.create()` to create an instance
+Pass these options to `Instance.create()` to create an instance
 
 ### Physical device selection
 
-You can set criterias to select an appropriate physical device for your application using `PhysicalDevice.Options`
+You can set criterias to select an appropriate physical device for your application using `PhysicalDevice.SelectOptions`
 
 Note: VK_KHR_subset (if available) and VK_KHR_swapchain are automatically enabled, no need to add them to the list
 
 ```zig
 const vk = @import("vulkan-zig");
 
-pub const Options = struct {
+pub const SelectOptions = struct {
     /// Name of the device to select
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1)
@@ -150,12 +150,12 @@ For this, you only need to call `Device.create()` with the previously selected p
 
 ### Swapchain creation
 
-Finally to create a swapchain, use `Swapchain.Config`
+Finally to create a swapchain, use `Swapchain.CreateOptions`
 
 ```zig
 const vk = @import("vulkan-zig");
 
-pub const Config = struct {
+pub const CreateOptions = struct {
     /// Desired size (in pixels) of the swapchain image(s)
     /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
@@ -193,7 +193,7 @@ pub const Config = struct {
 };
 ```
 
-Pass these configs and a the logical device to `Swapchain.create()` to create the swapchain
+Pass these options and a the logical device to `Swapchain.create()` to create the swapchain
 
 ### Vulkan dispatchers
 

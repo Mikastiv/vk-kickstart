@@ -39,7 +39,7 @@ pub const QueuePreference = enum {
     separate,
 };
 
-pub const Options = struct {
+pub const SelectOptions = struct {
     /// Name of the device to select
     name: ?[*:0]const u8 = null,
     /// Required Vulkan version (minimum 1.1)
@@ -69,7 +69,7 @@ pub fn select(
     allocator: mem.Allocator,
     instance: *const Instance,
     surface: vk.SurfaceKHR,
-    options: Options,
+    options: SelectOptions,
 ) !@This() {
     std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
 
@@ -313,7 +313,7 @@ fn getQueueNoGraphics(
     return index;
 }
 
-fn comparePhysicalDevices(options: Options, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
+fn comparePhysicalDevices(options: SelectOptions, a: PhysicalDeviceInfo, b: PhysicalDeviceInfo) bool {
     if (a.suitable != b.suitable) {
         return a.suitable;
     }
@@ -353,7 +353,7 @@ fn getLocalMemorySize(memory_properties: *const vk.PhysicalDeviceMemoryPropertie
 fn isDeviceSuitable(
     device: *const PhysicalDeviceInfo,
     surface: vk.SurfaceKHR,
-    options: Options,
+    options: SelectOptions,
 ) !bool {
     if (options.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
