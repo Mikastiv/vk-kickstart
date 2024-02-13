@@ -206,9 +206,9 @@ Pass these options and a the logical device to `Swapchain.create()` to create th
 
 ```zig
 const vkk = @import("vk-kickstart");
-const vkb = vkk.vkb; // Base dispatch
-const vki = vkk.vki; // Instance dispatch
-const vkd = vkk.vkd; // Device dispatch
+const vkb = vkk.dispatch.vkb; // Base dispatch
+const vki = vkk.dispatch.vki; // Instance dispatch
+const vkd = vkk.dispatch.vkd; // Device dispatch
 ```
 
 Not all functions are loaded by default. If you need other functions you will need to overwrite them in the root module like you would do for std.log.

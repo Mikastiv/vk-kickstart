@@ -7,9 +7,9 @@ const Window = @import("Window.zig");
 const Shaders = @import("shaders");
 
 // Vulkan dispatchers
-const vkb = vkk.vkb; // Base dispatch
-const vki = vkk.vki; // Instance dispatch
-const vkd = vkk.vkd; // Device dispatch
+const vkb = vkk.dispatch.vkb; // Base dispatch
+const vki = vkk.dispatch.vki; // Instance dispatch
+const vkd = vkk.dispatch.vkd; // Device dispatch
 
 // can override vulkan dispatch to choose what functions are loaded
 pub const vulkan_dispatch = struct {
