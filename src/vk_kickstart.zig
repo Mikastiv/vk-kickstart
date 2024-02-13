@@ -1,4 +1,4 @@
-const dispatch = @import("dispatch.zig");
+pub const dispatch = @import("dispatch.zig");
 pub const vkb = dispatch.vkb;
 pub const vki = dispatch.vki;
 pub const vkd = dispatch.vkd;
