@@ -28,7 +28,7 @@ zig fetch --save https://github.com/Mikastiv/vk-kickstart/archive/<COMMIT_HASH>.
 
 Then update your build file with the following:
 ```zig
-// Provide the path to the Vulkan registry
+// Provide the path to the Vulkan registry (requires version >= 1.3.277)
 const xml_path: []const u8 = b.pathFromRoot("vk.xml");
 
 // Add the vulkan-zig module
