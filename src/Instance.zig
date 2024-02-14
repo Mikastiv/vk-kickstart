@@ -15,24 +15,18 @@ const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation
 
 handle: vk.Instance,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
-debug_messenger: DebugMessenger,
+debug_messenger: ?vk.DebugUtilsMessengerEXT,
 api_version: u32,
 
-pub const DebugMessenger = if (build_options.enable_validation) vk.DebugUtilsMessengerEXT else void;
-pub const DebugCallback = if (build_options.enable_validation) vk.PfnDebugUtilsMessengerCallbackEXT else void;
-pub const DebugMessageSeverity = if (build_options.enable_validation) vk.DebugUtilsMessageSeverityFlagsEXT else void;
-pub const DebugMessageType = if (build_options.enable_validation) vk.DebugUtilsMessageTypeFlagsEXT else void;
-
-const default_debug_callback = if (build_options.enable_validation) defaultDebugMessageCallback else {};
-const default_message_severity = if (build_options.enable_validation) .{
+const default_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = .{
     .warning_bit_ext = true,
     .error_bit_ext = true,
-} else {};
-const default_message_type = if (build_options.enable_validation) .{
+};
+const default_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
     .general_bit_ext = true,
     .validation_bit_ext = true,
     .performance_bit_ext = true,
-} else {};
+};
 
 pub const CreateOptions = struct {
     /// Application name
@@ -53,11 +47,11 @@ pub const CreateOptions = struct {
     /// Vulkan allocation callbacks
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
     /// Custom debug callback function (or use default)
-    debug_callback: DebugCallback = default_debug_callback,
+    debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
     /// Debug message severity filter
-    debug_message_severity: DebugMessageSeverity = default_message_severity,
+    debug_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = default_message_severity,
     /// Debug message type filter
-    debug_message_type: DebugMessageType = default_message_type,
+    debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
     /// Debug user data pointer
     debug_user_data: ?*anyopaque = null,
 };
@@ -189,8 +183,8 @@ fn defaultDebugMessageCallback(
     return vk.FALSE;
 }
 
-fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !DebugMessenger {
-    if (!build_options.enable_validation) return;
+fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !?vk.DebugUtilsMessengerEXT {
+    if (!build_options.enable_validation) return null;
 
     const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
         .message_severity = options.debug_message_severity,
@@ -199,17 +193,18 @@ fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !DebugMes
         .p_user_data = options.debug_user_data,
     };
 
-    return vki().createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
+    return try vki().createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
 }
 
 fn destroyDebugMessenger(
     instance: vk.Instance,
-    debug_messenger: DebugMessenger,
+    debug_messenger: ?vk.DebugUtilsMessengerEXT,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) void {
     if (!build_options.enable_validation) return;
 
-    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger, allocation_callbacks);
+    std.debug.assert(debug_messenger != null);
+    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
 }
 
 fn isExtensionAvailable(

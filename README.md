@@ -97,11 +97,11 @@ pub const CreateOptions = struct {
     /// Vulkan allocation callbacks
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
     /// Custom debug callback function (or use default)
-    debug_callback: DebugCallback = default_debug_callback,
+    debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
     /// Debug message severity filter
-    debug_message_severity: DebugMessageSeverity = default_message_severity,
+    debug_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = default_message_severity,
     /// Debug message type filter
-    debug_message_type: DebugMessageType = default_message_type,
+    debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
     /// Debug user data pointer
     debug_user_data: ?*anyopaque = null,
 };
