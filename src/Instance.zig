@@ -11,6 +11,9 @@ const vk_log = @import("log.zig").vulkan_log;
 const vkb = dispatch.vkb;
 const vki = dispatch.vki;
 
+const BaseDispatch = dispatch.BaseDispatch;
+const InstanceDispatch = dispatch.InstanceDispatch;
+
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
 handle: vk.Instance,
@@ -56,11 +59,32 @@ pub const CreateOptions = struct {
     debug_user_data: ?*anyopaque = null,
 };
 
-pub fn create(allocator: mem.Allocator, loader: anytype, options: CreateOptions) !@This() {
+const Error = error{
+    OutOfMemory,
+    CommandLoadFailure,
+    UnsupportedInstanceVersion,
+    RequiredVersionNotAvailable,
+    EnumerateExtensionsFailed,
+    RequestedExtensionNotAvailable,
+    EnumerateLayersFailed,
+    RequestedLayerNotAvailable,
+    ValidationLayersNotAvailable,
+    DebugMessengerExtensionNotAvailable,
+    SurfaceExtensionNotAvailable,
+    WindowingExtensionNotAvailable,
+};
+
+pub const CreateError = Error ||
+    BaseDispatch.EnumerateInstanceExtensionPropertiesError ||
+    BaseDispatch.EnumerateInstanceLayerPropertiesError ||
+    BaseDispatch.CreateInstanceError ||
+    InstanceDispatch.CreateDebugUtilsMessengerEXTError;
+
+pub fn create(allocator: mem.Allocator, loader: anytype, options: CreateOptions) CreateError!@This() {
     try dispatch.initBaseDispatch(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
-    std.debug.assert(api_version >= vk.API_VERSION_1_1);
+    if (api_version < vk.API_VERSION_1_1) return error.UnsupportedInstanceVersion;
 
     const app_info = vk.ApplicationInfo{
         .p_application_name = options.app_name,

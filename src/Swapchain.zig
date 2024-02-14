@@ -3,12 +3,15 @@ const build_options = @import("build_options");
 const mem = std.mem;
 const vk = @import("vulkan-zig");
 const Device = @import("Device.zig");
-const disptach = @import("dispatch.zig");
+const dispatch = @import("dispatch.zig");
 
 const log = @import("log.zig").vk_kickstart_log;
 
-const vki = disptach.vki;
-const vkd = disptach.vkd;
+const vki = dispatch.vki;
+const vkd = dispatch.vkd;
+
+const InstanceDispatch = dispatch.InstanceDispatch;
+const DeviceDispatch = dispatch.DeviceDispatch;
 
 device: vk.Device,
 handle: vk.SwapchainKHR,
@@ -58,12 +61,25 @@ pub const CreateOptions = struct {
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
 };
 
+const Error = error{
+    OutOfMemory,
+    UsageFlagsNotSupported,
+    GetPhysicalDeviceFormatsFailed,
+    GetPhysicalDevicePresentModesFailed,
+};
+
+pub const CreateError = Error ||
+    InstanceDispatch.GetPhysicalDeviceSurfaceCapabilitiesKHRError ||
+    InstanceDispatch.GetPhysicalDeviceSurfaceFormatsKHRError ||
+    InstanceDispatch.GetPhysicalDeviceSurfacePresentModesKHRError ||
+    DeviceDispatch.CreateSwapchainKHRError;
+
 pub fn create(
     allocator: mem.Allocator,
     device: *const Device,
     surface: vk.SurfaceKHR,
     options: CreateOptions,
-) !@This() {
+) CreateError!@This() {
     std.debug.assert(surface != .null_handle);
 
     const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device.handle, surface);
@@ -145,10 +161,13 @@ pub fn destroy(self: *const @This()) void {
     vkd().destroySwapchainKHR(self.device, self.handle, self.allocation_callbacks);
 }
 
+pub const GetImagesError = error{ OutOfMemory, GetSwapchainImagesFailed } ||
+    DeviceDispatch.GetSwapchainImagesKHRError;
+
 /// Returns an array of the swapchain's images
 ///
 /// Caller owns the memory
-pub fn getImages(self: *const @This(), allocator: mem.Allocator) ![]vk.Image {
+pub fn getImages(self: *const @This(), allocator: mem.Allocator) GetImagesError![]vk.Image {
     var image_count: u32 = 0;
     var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
@@ -164,10 +183,12 @@ pub fn getImages(self: *const @This(), allocator: mem.Allocator) ![]vk.Image {
     return images;
 }
 
+pub const GetImageViewsError = error{OutOfMemory} || DeviceDispatch.CreateImageViewError;
+
 /// Returns an array of image views to the images
 ///
 /// Caller owns the memory
-pub fn getImageViews(self: *const @This(), allocator: mem.Allocator, images: []const vk.Image) ![]vk.ImageView {
+pub fn getImageViews(self: *const @This(), allocator: mem.Allocator, images: []const vk.Image) GetImageViewsError![]vk.ImageView {
     var image_views = try std.ArrayList(vk.ImageView).initCapacity(allocator, images.len);
     errdefer {
         for (image_views.items) |view| {

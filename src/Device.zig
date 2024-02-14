@@ -10,6 +10,8 @@ const log = @import("log.zig").vk_kickstart_log;
 const vki = dispatch.vki;
 const vkd = dispatch.vkd;
 
+const InstanceDispatch = dispatch.InstanceDispatch;
+
 handle: vk.Device,
 physical_device: PhysicalDevice,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
@@ -18,11 +20,19 @@ present_queue: vk.Queue,
 transfer_queue: ?vk.Queue,
 compute_queue: ?vk.Queue,
 
+const Error = error{
+    OutOfMemory,
+    CommandLoadFailure,
+};
+
+const CreateError = Error ||
+    InstanceDispatch.CreateDeviceError;
+
 pub fn create(
     allocator: mem.Allocator,
     physical_device: *const PhysicalDevice,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
-) !@This() {
+) CreateError!@This() {
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 

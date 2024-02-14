@@ -14,21 +14,21 @@ var instance: InstanceDispatch = undefined;
 var device_init: bool = false;
 var device: DeviceDispatch = undefined;
 
-pub fn initBaseDispatch(loader: anytype) !void {
+pub fn initBaseDispatch(loader: anytype) error{CommandLoadFailure}!void {
     if (!base_init) {
         base = try BaseDispatch.load(loader);
         base_init = true;
     }
 }
 
-pub fn initInstanceDispatch(inst: vk.Instance) !void {
+pub fn initInstanceDispatch(inst: vk.Instance) error{CommandLoadFailure}!void {
     if (!instance_init) {
         instance = try InstanceDispatch.load(inst, base.dispatch.vkGetInstanceProcAddr);
         instance_init = true;
     }
 }
 
-pub fn initDeviceDispatch(dev: vk.Device) !void {
+pub fn initDeviceDispatch(dev: vk.Device) error{CommandLoadFailure}!void {
     if (!device_init) {
         device = try DeviceDispatch.load(dev, instance.dispatch.vkGetDeviceProcAddr);
         device_init = true;

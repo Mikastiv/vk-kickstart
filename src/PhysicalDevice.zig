@@ -10,6 +10,8 @@ const log = @import("log.zig").vk_kickstart_log;
 
 const vki = dispatch.vki;
 
+const InstanceDispatch = dispatch.InstanceDispatch;
+
 /// Max number of enabled physical device extensions
 ///
 /// Can be overriden in root
@@ -74,11 +76,26 @@ pub const SelectOptions = struct {
     required_extensions: []const [*:0]const u8 = &.{},
 };
 
+const Error = error{
+    OutOfMemory,
+    Features12UnsupportedByInstance,
+    Features13UnsupportedByInstance,
+    EnumeratePhysicalDevicesFailed,
+    EnumeratePhysicalDeviceExtensionsFailed,
+    NoSuitableDeviceFound,
+};
+
+pub const SelectError = Error ||
+    InstanceDispatch.EnumeratePhysicalDevicesError ||
+    InstanceDispatch.EnumerateDeviceExtensionPropertiesError ||
+    InstanceDispatch.GetPhysicalDeviceSurfaceSupportKHRError ||
+    InstanceDispatch.GetPhysicalDeviceSurfaceFormatsKHRError;
+
 pub fn select(
     allocator: mem.Allocator,
     instance: *const Instance,
     options: SelectOptions,
-) !@This() {
+) SelectError!@This() {
     std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
 
     if (options.required_features_12 != null and instance.api_version < vk.API_VERSION_1_2)
@@ -223,7 +240,7 @@ pub fn name(self: *const @This()) []const u8 {
 /// Returns an array of the extensions required to be enabled when creating the logical device
 ///
 /// Caller owns the memory
-pub fn requiredExtensions(self: *const @This(), allocator: mem.Allocator) ![][*:0]const u8 {
+pub fn requiredExtensions(self: *const @This(), allocator: mem.Allocator) error{OutOfMemory}![][*:0]const u8 {
     const slice = try allocator.alloc([*:0]const u8, self.extension_count);
     for (slice, 0..) |*ptr, i| {
         ptr.* = @ptrCast(&self.extensions_array[i]);
@@ -611,7 +628,7 @@ fn getPhysicalDeviceInfo(
 
     var extension_count: u32 = 0;
     var result = try vki().enumerateDeviceExtensionProperties(handle, null, &extension_count, null);
-    if (result != .success) return error.EnumerateDeviceExtensionsFailed;
+    if (result != .success) return error.EnumeratePhysicalDeviceExtensionsFailed;
 
     const available_extensions = try allocator.alloc(vk.ExtensionProperties, extension_count);
     errdefer allocator.free(available_extensions);
