@@ -145,7 +145,7 @@ pub fn select(
             });
             log.debug(" device type: {s}", .{@tagName(info.properties.device_type)});
             const local_memory_size = getLocalMemorySize(&info.memory_properties);
-            log.debug(" local memory size: {any:.2}", .{std.fmt.fmtIntSizeBin(local_memory_size)});
+            log.debug(" local memory size: {:.2}", .{std.fmt.fmtIntSizeBin(local_memory_size)});
 
             log.debug(" queue family count: {d}", .{info.queue_families.len});
             log.debug(" graphics family: {s}", .{if (info.graphics_family_index != null) "yes" else "no"});
