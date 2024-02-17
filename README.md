@@ -167,7 +167,7 @@ pub const CreateOptions = struct {
         .{ .format = .b8g8r8a8_srgb, .color_space = .srgb_nonlinear_khr },
     },
     /// Array of desired present modes, in order of priority
-    /// Will fallback to fifo_khr is none match
+    /// Will fallback to fifo_khr if none match
     desired_present_modes: []const vk.PresentModeKHR = &.{
         .mailbox_khr,
     },
@@ -207,7 +207,7 @@ Not all functions are loaded by default. If you need other functions you will ne
 In your `main.zig`:
 ```zig
 pub const vulkan_dispatch = struct {
-    // pub const base = dispatch.base;
+    pub const base = dispatch.base;
     pub const instance = dispatch.instance;
     pub const device = dispatch.device;
 };
