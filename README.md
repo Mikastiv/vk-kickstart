@@ -43,19 +43,9 @@ const kickstart_dep = b.dependency("vk_kickstart", .{
     // Optional, default is false
     .enable_validation = if (optimize == .Debug) true else false,
     // Optional, default is false
-    .verbose = true, // False by default
+    .verbose = true,
 });
 exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
-```
-
-There are two more build options that are optional:
-```zig
-const kickstart_dep = b.dependency("vk_kickstart", .{
-    // Enables validation layers and debug messenger
-    .enable_validation = if (optimize == .Debug) true else false,
-    // Enables debug output
-    .verbose = true, // False by default
-});
 ```
 
 You can then import `vk-kickstart` as a module and vulkan-zig
