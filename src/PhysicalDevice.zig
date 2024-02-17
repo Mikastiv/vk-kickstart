@@ -37,7 +37,7 @@ transfer_family_index: ?u32,
 compute_family_index: ?u32,
 
 pub const QueuePreference = enum {
-    /// None
+    /// No queue will be created
     none,
     /// Dedicated (for transfer -> without compute, for computer -> without transfer)
     /// Both will not be the same family as the graphics queue
