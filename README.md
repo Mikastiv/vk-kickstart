@@ -43,19 +43,9 @@ const kickstart_dep = b.dependency("vk_kickstart", .{
     // Optional, default is false
     .enable_validation = if (optimize == .Debug) true else false,
     // Optional, default is false
-    .verbose = true, // False by default
+    .verbose = true,
 });
 exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
-```
-
-There are two more build options that are optional:
-```zig
-const kickstart_dep = b.dependency("vk_kickstart", .{
-    // Enables validation layers and debug messenger
-    .enable_validation = if (optimize == .Debug) true else false,
-    // Enables debug output
-    .verbose = true, // False by default
-});
 ```
 
 You can then import `vk-kickstart` as a module and vulkan-zig
@@ -177,7 +167,7 @@ pub const CreateOptions = struct {
         .{ .format = .b8g8r8a8_srgb, .color_space = .srgb_nonlinear_khr },
     },
     /// Array of desired present modes, in order of priority
-    /// Will fallback to fifo_khr is none match
+    /// Will fallback to fifo_khr if none match
     desired_present_modes: []const vk.PresentModeKHR = &.{
         .mailbox_khr,
     },
@@ -217,7 +207,7 @@ Not all functions are loaded by default. If you need other functions you will ne
 In your `main.zig`:
 ```zig
 pub const vulkan_dispatch = struct {
-    // pub const base = dispatch.base;
+    pub const base = dispatch.base;
     pub const instance = dispatch.instance;
     pub const device = dispatch.device;
 };
