@@ -7,8 +7,8 @@
             .hash = "122091debcee20ff2aaf983a9e8c215d4e50cc6caf44975442218901ea728e7dd79a",
         },
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/2b6d7691f15cd037f8f2c85ddd81e41dad875b4d.tar.gz",
-            .hash = "122047b773db60d234bfe5018a5cd6a0f46ee19456a0c824499d75b8ea018cabdf80",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/b1f3820d0881e0d3312f787aedeaf235d26c94db.tar.gz",
+            .hash = "12200d9fa7cc7167c0099afbde609e32c97c2508fb1c5334d388d2911ca7c780e22e",
         },
         .vk_kickstart = .{
             .path = "../../",
