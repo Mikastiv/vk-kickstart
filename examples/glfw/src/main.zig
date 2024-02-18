@@ -66,9 +66,11 @@ pub fn main() !void {
         .transfer_queue = .dedicated,
         .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{
-            "VK_KHR_acceleration_structure",
-            "VK_KHR_deferred_host_operations",
-            "VK_KHR_ray_tracing_pipeline",
+            vk.extension_info.khr_ray_tracing_pipeline.name,
+            vk.extension_info.khr_acceleration_structure.name,
+            vk.extension_info.khr_deferred_host_operations.name,
+            vk.extension_info.khr_buffer_device_address.name,
+            vk.extension_info.ext_descriptor_indexing.name,
         },
         .required_features = .{
             .sampler_anisotropy = vk.TRUE,
@@ -80,7 +82,11 @@ pub fn main() !void {
 
     std.log.info("selected {s}", .{physical_device.name()});
 
-    const device = try vkk.Device.create(allocator, &physical_device, null);
+    var rt_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR{
+        .ray_tracing_pipeline = vk.TRUE,
+    };
+
+    const device = try vkk.Device.create(allocator, &physical_device, @ptrCast(&rt_features), null);
     defer device.destroy();
 
     var swapchain = try vkk.Swapchain.create(allocator, &device, surface, .{

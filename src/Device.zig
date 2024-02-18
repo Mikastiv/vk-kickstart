@@ -31,6 +31,7 @@ const CreateError = Error ||
 pub fn create(
     allocator: mem.Allocator,
     physical_device: *const PhysicalDevice,
+    p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!@This() {
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
@@ -45,10 +46,16 @@ pub fn create(
     var features_13 = physical_device.features_13;
 
     features.p_next = &features_11;
-    if (physical_device.properties.api_version >= vk.API_VERSION_1_2)
+    if (physical_device.properties.api_version >= vk.API_VERSION_1_3) {
         features_11.p_next = &features_12;
-    if (physical_device.properties.api_version >= vk.API_VERSION_1_3)
         features_12.p_next = &features_13;
+        features_13.p_next = p_next_chain;
+    } else if (physical_device.properties.api_version >= vk.API_VERSION_1_2) {
+        features_11.p_next = &features_12;
+        features_12.p_next = p_next_chain;
+    } else {
+        features_11.p_next = p_next_chain;
+    }
 
     if (build_options.verbose) {
         log.debug("----- device creation -----", .{});
