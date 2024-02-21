@@ -39,10 +39,10 @@ compute_family_index: ?u32,
 pub const QueuePreference = enum {
     /// No queue will be created
     none,
-    /// Dedicated (for transfer -> without compute, for computer -> without transfer)
+    /// Dedicated (for transfer -> without compute, for computer -> without transfer).
     /// Both will not be the same family as the graphics queue
     dedicated,
-    /// Separate from graphics family
+    /// Separate from graphics family.
     /// This mode will try to find a dedicated, but will fallback to a common for
     /// transfer and compute if no dedicated is found
     separate,
@@ -71,7 +71,7 @@ pub const SelectOptions = struct {
     required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
     /// Required physical device feature version 1.3
     required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
-    /// Array of required physical device extensions to enable
+    /// Array of required physical device extensions to enable.
     /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled
     required_extensions: []const [*:0]const u8 = &.{},
 };

@@ -42,7 +42,7 @@ pub const CreateOptions = struct {
     engine_version: u32 = 0,
     /// Required Vulkan version (minimum 1.1)
     required_api_version: u32 = vk.API_VERSION_1_1,
-    /// Array of required extensions to enable
+    /// Array of required extensions to enable.
     /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled
     required_extensions: []const [*:0]const u8 = &.{},
     /// Array of required layers to enable

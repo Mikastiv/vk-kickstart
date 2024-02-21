@@ -25,26 +25,26 @@ present_mode: vk.PresentModeKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 
 pub const CreateOptions = struct {
-    /// Desired size (in pixels) of the swapchain image(s)
+    /// Desired size (in pixels) of the swapchain image(s).
     /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
     /// Swapchain create flags
     create_flags: vk.SwapchainCreateFlagsKHR = .{},
-    /// Desired minimum number of presentable images that the application needs
-    /// If left on default, will try to use the minimum of the device + 1
-    /// This value will be clamped between the device's minimum and maximum (if there is a max)
+    /// Desired minimum number of presentable images that the application needs.
+    /// If left on default, will try to use the minimum of the device + 1.
+    /// This value will be clamped between the device's minimum and maximum (if there is a max).
     desired_min_image_count: ?u32 = null,
-    /// Array of desired image formats, in order of priority
+    /// Array of desired image formats, in order of priority.
     /// Will fallback to the first found if none match
     desired_formats: []const vk.SurfaceFormatKHR = &.{
         .{ .format = .b8g8r8a8_srgb, .color_space = .srgb_nonlinear_khr },
     },
-    /// Array of desired present modes, in order of priority
+    /// Array of desired present modes, in order of priority.
     /// Will fallback to fifo_khr is none match
     desired_present_modes: []const vk.PresentModeKHR = &.{
         .mailbox_khr,
     },
-    /// Desired number of views in a multiview/stereo surface
+    /// Desired number of views in a multiview/stereo surface.
     /// Will be clamped down if higher than device's max
     desired_array_layer_count: u32 = 1,
     /// Intended usage of the (acquired) swapchain images
