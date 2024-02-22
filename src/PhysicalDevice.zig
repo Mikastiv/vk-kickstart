@@ -4,6 +4,7 @@ const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const Instance = @import("Instance.zig");
 const root = @import("root");
+const PhysicalDevice = @This();
 
 const log = @import("log.zig").vk_kickstart_log;
 
@@ -93,7 +94,7 @@ pub fn select(
     allocator: std.mem.Allocator,
     instance: *const Instance,
     options: SelectOptions,
-) SelectError!@This() {
+) SelectError!PhysicalDevice {
     std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
 
     if (options.required_features_12 != null and instance.api_version < vk.API_VERSION_1_2)
@@ -229,7 +230,7 @@ pub fn select(
 }
 
 /// Returns the physical device's name
-pub fn name(self: *const @This()) []const u8 {
+pub fn name(self: *const PhysicalDevice) []const u8 {
     const str: [*:0]const u8 = @ptrCast(&self.properties.device_name);
     return std.mem.span(str);
 }
@@ -238,7 +239,7 @@ pub fn name(self: *const @This()) []const u8 {
 ///
 /// Caller owns the memory
 pub fn requiredExtensions(
-    self: *const @This(),
+    self: *const PhysicalDevice,
     allocator: std.mem.Allocator,
 ) error{OutOfMemory}![][*:0]const u8 {
     const slice = try allocator.alloc([*:0]const u8, self.extension_count);

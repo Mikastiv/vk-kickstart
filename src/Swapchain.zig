@@ -3,6 +3,7 @@ const build_options = @import("build_options");
 const vk = @import("vulkan-zig");
 const Device = @import("Device.zig");
 const dispatch = @import("dispatch.zig");
+const Swapchain = @This();
 
 const log = @import("log.zig").vk_kickstart_log;
 
@@ -80,7 +81,7 @@ pub fn create(
     device: *const Device,
     surface: vk.SurfaceKHR,
     options: CreateOptions,
-) CreateError!@This() {
+) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
 
     const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device, surface);
@@ -157,7 +158,7 @@ pub fn create(
     };
 }
 
-pub fn destroy(self: *const @This()) void {
+pub fn destroy(self: *const Swapchain) void {
     vkd().destroySwapchainKHR(self.device, self.handle, self.allocation_callbacks);
 }
 
@@ -167,7 +168,7 @@ pub const GetImagesError = error{ OutOfMemory, GetSwapchainImagesFailed } ||
 /// Returns an array of the swapchain's images
 ///
 /// Caller owns the memory
-pub fn getImages(self: *const @This(), allocator: std.mem.Allocator) GetImagesError![]vk.Image {
+pub fn getImages(self: *const Swapchain, allocator: std.mem.Allocator) GetImagesError![]vk.Image {
     var image_count: u32 = 0;
     var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
@@ -189,7 +190,7 @@ pub const GetImageViewsError = error{OutOfMemory} || DeviceDispatch.CreateImageV
 ///
 /// Caller owns the memory
 pub fn getImageViews(
-    self: *const @This(),
+    self: *const Swapchain,
     allocator: std.mem.Allocator,
     images: []const vk.Image,
 ) GetImageViewsError![]vk.ImageView {

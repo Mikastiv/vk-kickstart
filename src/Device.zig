@@ -3,6 +3,7 @@ const build_options = @import("build_options");
 const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
+const Device = @This();
 
 const log = @import("log.zig").vk_kickstart_log;
 
@@ -37,7 +38,7 @@ pub fn create(
     physical_device: *const PhysicalDevice,
     p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
-) CreateError!@This() {
+) CreateError!Device {
     const queue_create_infos = try createQueueInfos(allocator, physical_device);
     defer allocator.free(queue_create_infos);
 
@@ -125,7 +126,7 @@ pub fn create(
     };
 }
 
-pub fn destroy(self: *const @This()) void {
+pub fn destroy(self: *const Device) void {
     vkd().destroyDevice(self.handle, self.allocation_callbacks);
 }
 

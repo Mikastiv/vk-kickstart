@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const vk = @import("vulkan-zig");
 const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
+const Instance = @This();
 
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
@@ -83,7 +84,7 @@ pub fn create(
     allocator: std.mem.Allocator,
     loader: anytype,
     options: CreateOptions,
-) CreateError!@This() {
+) CreateError!Instance {
     try dispatch.initBaseDispatch(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
@@ -183,7 +184,7 @@ pub fn create(
     };
 }
 
-pub fn destroy(self: *const @This()) void {
+pub fn destroy(self: *const Instance) void {
     destroyDebugMessenger(self.handle, self.debug_messenger, self.allocation_callbacks);
     vki().destroyInstance(self.handle, self.allocation_callbacks);
 }
