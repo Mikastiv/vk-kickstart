@@ -98,10 +98,7 @@ pub fn main() !void {
     defer allocator.free(images);
 
     var image_views = try swapchain.getImageViews(allocator, images);
-    defer {
-        swapchain.destroyImageViews(image_views);
-        allocator.free(image_views);
-    }
+    defer swapchain.destroyImageViews(allocator, image_views);
 
     const render_pass = try createRenderPass(device.handle, swapchain.image_format);
     defer vkd().destroyRenderPass(device.handle, render_pass, null);
@@ -265,10 +262,9 @@ fn recreateSwapchain(
         .old_swapchain = old_swapchain.handle,
     });
 
-    old_swapchain.destroyImageViews(image_views.*);
+    old_swapchain.destroyImageViews(allocator, image_views.*);
     old_swapchain.destroy();
 
-    allocator.free(image_views.*);
     allocator.free(images.*);
     destroyFramebuffers(allocator, device.handle, framebuffers.*);
 
