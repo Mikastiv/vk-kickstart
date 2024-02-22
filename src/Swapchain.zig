@@ -13,8 +13,8 @@ const vkd = dispatch.vkd;
 const InstanceDispatch = dispatch.InstanceDispatch;
 const DeviceDispatch = dispatch.DeviceDispatch;
 
-device: vk.Device,
 handle: vk.SwapchainKHR,
+device: vk.Device,
 surface: vk.SurfaceKHR,
 image_count: u32,
 image_format: vk.Format,
@@ -84,7 +84,7 @@ pub fn create(
 ) CreateError!@This() {
     std.debug.assert(surface != .null_handle);
 
-    const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device.handle, surface);
+    const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device, surface);
     defer {
         allocator.free(surface_support.formats);
         allocator.free(surface_support.present_modes);
@@ -107,8 +107,8 @@ pub fn create(
             return error.UsageFlagsNotSupported;
     }
 
-    const graphics_queue_index = device.physical_device.graphics_family_index;
-    const present_queue_index = device.physical_device.present_family_index;
+    const graphics_queue_index = device.graphics_family_index;
+    const present_queue_index = device.present_family_index;
     const same_index = graphics_queue_index == present_queue_index;
     const queue_family_indices = [_]u32{ graphics_queue_index, present_queue_index };
 

@@ -13,7 +13,7 @@ const vkd = dispatch.vkd;
 const InstanceDispatch = dispatch.InstanceDispatch;
 
 handle: vk.Device,
-physical_device: PhysicalDevice,
+physical_device: vk.PhysicalDevice,
 surface: vk.SurfaceKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 graphics_queue: vk.Queue,
@@ -112,7 +112,7 @@ pub fn create(
 
     return .{
         .handle = handle,
-        .physical_device = physical_device.*,
+        .physical_device = physical_device.handle,
         .surface = physical_device.surface,
         .allocation_callbacks = allocation_callbacks,
         .graphics_queue = graphics_queue,
