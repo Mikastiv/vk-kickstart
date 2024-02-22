@@ -228,18 +228,6 @@ pub fn getImageViews(
     return image_views.toOwnedSlice();
 }
 
-/// Destroys and frees the image views
-pub fn destroyImageViews(
-    self: *const @This(),
-    allocator: std.mem.Allocator,
-    image_views: []const vk.ImageView,
-) void {
-    for (image_views) |view| {
-        vkd().destroyImageView(self.device, view, self.allocation_callbacks);
-    }
-    allocator.free(image_views);
-}
-
 fn isSharedPresentMode(present_mode: vk.PresentModeKHR) bool {
     return present_mode == .immediate_khr or
         present_mode == .mailbox_khr or
