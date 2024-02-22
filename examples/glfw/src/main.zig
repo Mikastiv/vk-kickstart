@@ -121,7 +121,7 @@ pub fn main() !void {
     const pipeline = try createGraphicsPipeline(device.handle, render_pass, vertex_shader, fragment_shader, pipeline_layout);
     defer vkd().destroyPipeline(device.handle, pipeline, null);
 
-    const command_pool = try createCommandPool(device.handle, device.physical_device.graphics_family_index);
+    const command_pool = try createCommandPool(device.handle, device.graphics_family_index);
     defer vkd().destroyCommandPool(device.handle, command_pool, null);
 
     const command_buffers = try createCommandBuffers(allocator, device.handle, command_pool, max_frames_in_flight);

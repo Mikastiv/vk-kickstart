@@ -57,6 +57,8 @@ pub const CreateOptions = struct {
     clipped: vk.Bool32 = vk.TRUE,
     /// Existing non-retired swapchain currently associated with surface
     old_swapchain: ?vk.SwapchainKHR = null,
+    /// pNext chain
+    p_next_chain: ?*anyopaque = null,
     /// Vulkan allocation callbacks
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
 };
@@ -110,9 +112,8 @@ pub fn create(
     const same_index = graphics_queue_index == present_queue_index;
     const queue_family_indices = [_]u32{ graphics_queue_index, present_queue_index };
 
-    // NOTE: lookup p_next extensions
-
     const swapchain_info = vk.SwapchainCreateInfoKHR{
+        .p_next = options.p_next_chain,
         .flags = options.create_flags,
         .surface = surface,
         .min_image_count = image_count,

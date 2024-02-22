@@ -14,11 +14,16 @@ const InstanceDispatch = dispatch.InstanceDispatch;
 
 handle: vk.Device,
 physical_device: PhysicalDevice,
+surface: vk.SurfaceKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 graphics_queue: vk.Queue,
 present_queue: vk.Queue,
 transfer_queue: ?vk.Queue,
 compute_queue: ?vk.Queue,
+graphics_family_index: u32,
+present_family_index: u32,
+transfer_family_index: ?u32,
+compute_family_index: ?u32,
 
 const Error = error{
     OutOfMemory,
@@ -108,11 +113,16 @@ pub fn create(
     return .{
         .handle = handle,
         .physical_device = physical_device.*,
+        .surface = physical_device.surface,
         .allocation_callbacks = allocation_callbacks,
         .graphics_queue = graphics_queue,
         .present_queue = present_queue,
         .transfer_queue = transfer_queue,
         .compute_queue = compute_queue,
+        .graphics_family_index = physical_device.graphics_family_index,
+        .present_family_index = physical_device.present_family_index,
+        .transfer_family_index = physical_device.transfer_family_index,
+        .compute_family_index = physical_device.compute_family_index,
     };
 }
 

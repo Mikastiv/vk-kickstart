@@ -20,7 +20,6 @@ pub const max_extensions = if (@hasDecl(root, "physical_device_max_extensions"))
 else
     16;
 
-instance_version: u32,
 handle: vk.PhysicalDevice,
 surface: vk.SurfaceKHR,
 properties: vk.PhysicalDeviceProperties,
@@ -205,7 +204,6 @@ pub fn select(
     }
 
     return .{
-        .instance_version = instance.api_version,
         .handle = selected.handle,
         .surface = options.surface,
         .features = options.required_features,
