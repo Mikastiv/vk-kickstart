@@ -3,7 +3,6 @@ const build_options = @import("build_options");
 const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const Instance = @import("Instance.zig");
-const mem = std.mem;
 const root = @import("root");
 
 const log = @import("log.zig").vk_kickstart_log;
@@ -91,7 +90,7 @@ pub const SelectError = Error ||
     InstanceDispatch.GetPhysicalDeviceSurfaceFormatsKHRError;
 
 pub fn select(
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     instance: *const Instance,
     options: SelectOptions,
 ) SelectError!@This() {
@@ -232,13 +231,16 @@ pub fn select(
 /// Returns the physical device's name
 pub fn name(self: *const @This()) []const u8 {
     const str: [*:0]const u8 = @ptrCast(&self.properties.device_name);
-    return mem.span(str);
+    return std.mem.span(str);
 }
 
 /// Returns an array of the extensions required to be enabled when creating the logical device
 ///
 /// Caller owns the memory
-pub fn requiredExtensions(self: *const @This(), allocator: mem.Allocator) error{OutOfMemory}![][*:0]const u8 {
+pub fn requiredExtensions(
+    self: *const @This(),
+    allocator: std.mem.Allocator,
+) error{OutOfMemory}![][*:0]const u8 {
     const slice = try allocator.alloc([*:0]const u8, self.extension_count);
     for (slice, 0..) |*ptr, i| {
         ptr.* = @ptrCast(&self.extensions_array[i]);
@@ -382,7 +384,7 @@ fn isDeviceSuitable(
 ) !bool {
     if (options.name) |n| {
         const device_name: [*:0]const u8 = @ptrCast(&device.properties.device_name);
-        if (mem.orderZ(u8, n, device_name) != .eq) return false;
+        if (std.mem.orderZ(u8, n, device_name) != .eq) return false;
     }
 
     if (device.properties.api_version < options.required_api_version) return false;
@@ -595,7 +597,7 @@ fn isExtensionAvailable(
 ) bool {
     for (available_extensions) |ext| {
         const n: [*:0]const u8 = @ptrCast(&ext.extension_name);
-        if (mem.orderZ(u8, n, extension) == .eq) {
+        if (std.mem.orderZ(u8, n, extension) == .eq) {
             return true;
         }
     }
@@ -603,7 +605,7 @@ fn isExtensionAvailable(
 }
 
 fn getPhysicalDeviceInfo(
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     handle: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
     api_version: u32,
@@ -687,7 +689,7 @@ fn getPhysicalDeviceInfo(
     };
 }
 
-fn getPhysicalDevices(allocator: mem.Allocator, instance: vk.Instance) ![]vk.PhysicalDevice {
+fn getPhysicalDevices(allocator: std.mem.Allocator, instance: vk.Instance) ![]vk.PhysicalDevice {
     var device_count: u32 = 0;
     var result = try vki().enumeratePhysicalDevices(instance, &device_count, null);
     if (result != .success) return error.EnumeratePhysicalDevicesFailed;

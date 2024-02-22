@@ -3,7 +3,6 @@ const builtin = @import("builtin");
 const vk = @import("vulkan-zig");
 const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
-const mem = std.mem;
 
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
@@ -80,7 +79,11 @@ pub const CreateError = Error ||
     BaseDispatch.CreateInstanceError ||
     InstanceDispatch.CreateDebugUtilsMessengerEXTError;
 
-pub fn create(allocator: mem.Allocator, loader: anytype, options: CreateOptions) CreateError!@This() {
+pub fn create(
+    allocator: std.mem.Allocator,
+    loader: anytype,
+    options: CreateOptions,
+) CreateError!@This() {
     try dispatch.initBaseDispatch(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
@@ -237,7 +240,7 @@ fn isExtensionAvailable(
 ) bool {
     for (available_extensions) |ext| {
         const name: [*:0]const u8 = @ptrCast(&ext.extension_name);
-        if (mem.orderZ(u8, name, extension) == .eq) {
+        if (std.mem.orderZ(u8, name, extension) == .eq) {
             return true;
         }
     }
@@ -257,7 +260,7 @@ fn addExtension(
 }
 
 fn getRequiredExtensions(
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
 ) !std.ArrayList([*:0]const u8) {
@@ -307,7 +310,7 @@ fn isLayerAvailable(
 ) bool {
     for (available_layers) |l| {
         const name: [*:0]const u8 = @ptrCast(&l.layer_name);
-        if (mem.orderZ(u8, name, layer) == .eq) {
+        if (std.mem.orderZ(u8, name, layer) == .eq) {
             return true;
         }
     }
@@ -327,7 +330,7 @@ fn addLayer(
 }
 
 fn getRequiredLayers(
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     config_layers: []const [*:0]const u8,
     available_layers: []const vk.LayerProperties,
 ) !std.ArrayList([*:0]const u8) {
@@ -351,7 +354,7 @@ fn getRequiredLayers(
     return layers;
 }
 
-fn getAvailableExtensions(allocator: mem.Allocator) ![]vk.ExtensionProperties {
+fn getAvailableExtensions(allocator: std.mem.Allocator) ![]vk.ExtensionProperties {
     var extension_count: u32 = 0;
     var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
     if (result != .success) return error.EnumerateExtensionsFailed;
@@ -367,7 +370,7 @@ fn getAvailableExtensions(allocator: mem.Allocator) ![]vk.ExtensionProperties {
     return extension_properties;
 }
 
-fn getAvailableLayers(allocator: mem.Allocator) ![]vk.LayerProperties {
+fn getAvailableLayers(allocator: std.mem.Allocator) ![]vk.LayerProperties {
     var layer_count: u32 = 0;
     var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
     if (result != .success) return error.EnumerateLayersFailed;

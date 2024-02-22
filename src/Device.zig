@@ -1,6 +1,5 @@
 const std = @import("std");
 const build_options = @import("build_options");
-const mem = std.mem;
 const vk = @import("vulkan-zig");
 const dispatch = @import("dispatch.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
@@ -34,7 +33,7 @@ const CreateError = Error ||
     InstanceDispatch.CreateDeviceError;
 
 pub fn create(
-    allocator: mem.Allocator,
+    allocator: std.mem.Allocator,
     physical_device: *const PhysicalDevice,
     p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
@@ -140,7 +139,10 @@ fn printEnabledFeatures(comptime T: type, features: T) void {
     }
 }
 
-fn createQueueInfos(allocator: mem.Allocator, physical_device: *const PhysicalDevice) ![]vk.DeviceQueueCreateInfo {
+fn createQueueInfos(
+    allocator: std.mem.Allocator,
+    physical_device: *const PhysicalDevice,
+) ![]vk.DeviceQueueCreateInfo {
     var unique_queue_families = std.AutoHashMap(u32, void).init(allocator);
     defer unique_queue_families.deinit();
 
