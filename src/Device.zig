@@ -19,10 +19,10 @@ graphics_queue: vk.Queue,
 present_queue: vk.Queue,
 transfer_queue: ?vk.Queue,
 compute_queue: ?vk.Queue,
-graphics_family_index: u32,
-present_family_index: u32,
-transfer_family_index: ?u32,
-compute_family_index: ?u32,
+graphics_queue_index: u32,
+present_queue_index: u32,
+transfer_queue_index: ?u32,
+compute_queue_index: ?u32,
 
 const Error = error{
     OutOfMemory,
@@ -64,13 +64,13 @@ pub fn create(
     if (build_options.verbose) {
         log.debug("----- device creation -----", .{});
         log.debug("queue count: {d}", .{queue_create_infos.len});
-        log.debug("graphics family index: {d}", .{physical_device.graphics_family_index});
-        log.debug("present family index: {d}", .{physical_device.present_family_index});
-        if (physical_device.transfer_family_index) |family| {
-            log.debug("transfer family index: {d}", .{family});
+        log.debug("graphics queue family index: {d}", .{physical_device.graphics_queue_index});
+        log.debug("present queue family index: {d}", .{physical_device.present_queue_index});
+        if (physical_device.transfer_queue_index) |family| {
+            log.debug("transfer queue family index: {d}", .{family});
         }
-        if (physical_device.compute_family_index) |family| {
-            log.debug("compute family index: {d}", .{family});
+        if (physical_device.compute_queue_index) |family| {
+            log.debug("compute queue family index: {d}", .{family});
         }
 
         log.debug("enabled extensions:", .{});
@@ -104,10 +104,10 @@ pub fn create(
     try dispatch.initDeviceDispatch(handle);
     errdefer vkd().destroyDevice(handle, allocation_callbacks);
 
-    const graphics_queue = vkd().getDeviceQueue(handle, physical_device.graphics_family_index, 0);
-    const present_queue = vkd().getDeviceQueue(handle, physical_device.present_family_index, 0);
-    const transfer_queue = if (physical_device.transfer_family_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
-    const compute_queue = if (physical_device.compute_family_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
+    const graphics_queue = vkd().getDeviceQueue(handle, physical_device.graphics_queue_index, 0);
+    const present_queue = vkd().getDeviceQueue(handle, physical_device.present_queue_index, 0);
+    const transfer_queue = if (physical_device.transfer_queue_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
+    const compute_queue = if (physical_device.compute_queue_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
 
     return .{
         .handle = handle,
@@ -118,10 +118,10 @@ pub fn create(
         .present_queue = present_queue,
         .transfer_queue = transfer_queue,
         .compute_queue = compute_queue,
-        .graphics_family_index = physical_device.graphics_family_index,
-        .present_family_index = physical_device.present_family_index,
-        .transfer_family_index = physical_device.transfer_family_index,
-        .compute_family_index = physical_device.compute_family_index,
+        .graphics_queue_index = physical_device.graphics_queue_index,
+        .present_queue_index = physical_device.present_queue_index,
+        .transfer_queue_index = physical_device.transfer_queue_index,
+        .compute_queue_index = physical_device.compute_queue_index,
     };
 }
 
@@ -146,12 +146,12 @@ fn createQueueInfos(
     var unique_queue_families = std.AutoHashMap(u32, void).init(allocator);
     defer unique_queue_families.deinit();
 
-    try unique_queue_families.put(physical_device.graphics_family_index, {});
-    try unique_queue_families.put(physical_device.present_family_index, {});
-    if (physical_device.transfer_family_index) |idx| {
+    try unique_queue_families.put(physical_device.graphics_queue_index, {});
+    try unique_queue_families.put(physical_device.present_queue_index, {});
+    if (physical_device.transfer_queue_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
-    if (physical_device.compute_family_index) |idx| {
+    if (physical_device.compute_queue_index) |idx| {
         try unique_queue_families.put(idx, {});
     }
 

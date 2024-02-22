@@ -106,8 +106,8 @@ pub fn create(
             return error.UsageFlagsNotSupported;
     }
 
-    const graphics_queue_index = device.graphics_family_index;
-    const present_queue_index = device.present_family_index;
+    const graphics_queue_index = device.graphics_queue_index;
+    const present_queue_index = device.present_queue_index;
     const same_index = graphics_queue_index == present_queue_index;
     const queue_family_indices = [_]u32{ graphics_queue_index, present_queue_index };
 
