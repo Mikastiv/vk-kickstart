@@ -95,6 +95,8 @@ pub const CreateOptions = struct {
     debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
     /// Debug user data pointer
     debug_user_data: ?*anyopaque = null,
+    /// pNext chain
+    p_next_chain: ?*anyopaque = null,
 };
 ```
 
@@ -184,6 +186,8 @@ pub const CreateOptions = struct {
     clipped: vk.Bool32 = vk.TRUE,
     /// Existing non-retired swapchain currently associated with surface
     old_swapchain: ?vk.SwapchainKHR = null,
+    /// pNext chain
+    p_next_chain: ?*anyopaque = null,
     /// Vulkan allocation callbacks
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
 };

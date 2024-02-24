@@ -57,6 +57,8 @@ pub const CreateOptions = struct {
     debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
     /// Debug user data pointer
     debug_user_data: ?*anyopaque = null,
+    /// pNext chain
+    p_next_chain: ?*anyopaque = null,
 };
 
 const Error = error{
@@ -118,12 +120,13 @@ pub fn create(
     var required_layers = try getRequiredLayers(allocator, options.required_layers, available_layers);
     defer required_layers.deinit();
 
-    const next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
+    const p_next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
+        .p_next = options.p_next_chain,
         .message_severity = options.debug_message_severity,
         .message_type = options.debug_message_type,
         .pfn_user_callback = options.debug_callback,
         .p_user_data = options.debug_user_data,
-    } else null;
+    } else options.p_next_chain;
 
     const instance_info = vk.InstanceCreateInfo{
         .flags = if (portability_enumeration_support) .{ .enumerate_portability_bit_khr = true } else .{},
@@ -132,7 +135,7 @@ pub fn create(
         .pp_enabled_extension_names = required_extensions.items.ptr,
         .enabled_layer_count = @as(u32, @intCast(required_layers.items.len)),
         .pp_enabled_layer_names = required_layers.items.ptr,
-        .p_next = next,
+        .p_next = p_next,
     };
 
     if (build_options.verbose) {
