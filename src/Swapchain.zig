@@ -162,13 +162,33 @@ pub fn destroy(self: *const Swapchain) void {
     vkd().destroySwapchainKHR(self.device, self.handle, self.allocation_callbacks);
 }
 
-pub const GetImagesError = error{ OutOfMemory, GetSwapchainImagesFailed } ||
+pub const GetImagesError = error{GetSwapchainImagesFailed} || DeviceDispatch.GetSwapchainImagesKHRError;
+
+/// Returns an array of the swapchain's images.
+///
+/// Buffer is used as the output.
+pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void {
+    std.debug.assert(buffer.len == self.image_count);
+
+    var image_count: u32 = 0;
+    var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
+    if (result != .success) return error.GetSwapchainImagesFailed;
+
+    std.debug.assert(image_count == self.image_count);
+
+    while (true) {
+        result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, buffer.ptr);
+        if (result == .success) break;
+    }
+}
+
+pub const GetImagesAllocError = error{ OutOfMemory, GetSwapchainImagesFailed } ||
     DeviceDispatch.GetSwapchainImagesKHRError;
 
-/// Returns an array of the swapchain's images
+/// Returns an array of the swapchain's images.
 ///
-/// Caller owns the memory
-pub fn getImages(self: *const Swapchain, allocator: std.mem.Allocator) GetImagesError![]vk.Image {
+/// Caller owns the memory.
+pub fn getImagesAlloc(self: *const Swapchain, allocator: std.mem.Allocator) GetImagesAllocError![]vk.Image {
     var image_count: u32 = 0;
     var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
@@ -184,16 +204,60 @@ pub fn getImages(self: *const Swapchain, allocator: std.mem.Allocator) GetImages
     return images;
 }
 
-pub const GetImageViewsError = error{OutOfMemory} || DeviceDispatch.CreateImageViewError;
+pub const GetImageViewsError = DeviceDispatch.CreateImageViewError;
 
-/// Returns an array of image views to the images
+/// Returns an array of image views to the images.
 ///
-/// Caller owns the memory
+/// Buffer is used as the output.
 pub fn getImageViews(
+    self: *const Swapchain,
+    images: []const vk.Image,
+    buffer: []vk.ImageView,
+) GetImageViewsError!void {
+    std.debug.assert(buffer.len == images.len);
+
+    var initialized_count: u32 = 0;
+    errdefer {
+        for (0..initialized_count) |i| {
+            vkd().destroyImageView(self.device, buffer[i], self.allocation_callbacks);
+        }
+    }
+
+    for (images, 0..) |image, i| {
+        const image_view_info = vk.ImageViewCreateInfo{
+            .image = image,
+            .view_type = .@"2d",
+            .format = self.image_format,
+            .components = .{
+                .r = .identity,
+                .g = .identity,
+                .b = .identity,
+                .a = .identity,
+            },
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        };
+
+        buffer[i] = try vkd().createImageView(self.device, &image_view_info, self.allocation_callbacks);
+        initialized_count += 1;
+    }
+}
+
+pub const GetImageViewsErrorAlloc = error{OutOfMemory} || DeviceDispatch.CreateImageViewError;
+
+/// Returns an array of image views to the images.
+///
+/// Caller owns the memory.
+pub fn getImageViewsAlloc(
     self: *const Swapchain,
     allocator: std.mem.Allocator,
     images: []const vk.Image,
-) GetImageViewsError![]vk.ImageView {
+) GetImageViewsErrorAlloc![]vk.ImageView {
     var image_views = try std.ArrayList(vk.ImageView).initCapacity(allocator, images.len);
     errdefer {
         for (image_views.items) |view| {

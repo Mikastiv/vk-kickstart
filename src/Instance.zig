@@ -32,32 +32,32 @@ const default_message_type: vk.DebugUtilsMessageTypeFlagsEXT = .{
 };
 
 pub const CreateOptions = struct {
-    /// Application name
+    /// Application name.
     app_name: [*:0]const u8 = "",
-    /// Application version
+    /// Application version.
     app_version: u32 = 0,
-    /// Engine name
+    /// Engine name.
     engine_name: [*:0]const u8 = "",
-    /// Engine version
+    /// Engine version.
     engine_version: u32 = 0,
-    /// Required Vulkan version (minimum 1.1)
+    /// Required Vulkan version (minimum 1.1).
     required_api_version: u32 = vk.API_VERSION_1_1,
     /// Array of required extensions to enable.
-    /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled
+    /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
-    /// Array of required layers to enable
+    /// Array of required layers to enable.
     required_layers: []const [*:0]const u8 = &.{},
-    /// Vulkan allocation callbacks
+    /// Vulkan allocation callbacks.
     allocation_callbacks: ?*const vk.AllocationCallbacks = null,
-    /// Custom debug callback function (or use default)
+    /// Custom debug callback function (or use default).
     debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
-    /// Debug message severity filter
+    /// Debug message severity filter.
     debug_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = default_message_severity,
-    /// Debug message type filter
+    /// Debug message type filter.
     debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
-    /// Debug user data pointer
+    /// Debug user data pointer.
     debug_user_data: ?*anyopaque = null,
-    /// pNext chain
+    /// pNext chain.
     p_next_chain: ?*anyopaque = null,
 };
 

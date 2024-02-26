@@ -12,13 +12,16 @@ const vki = dispatch.vki;
 
 const InstanceDispatch = dispatch.InstanceDispatch;
 
-/// Max number of enabled physical device extensions
+/// Max number of enabled physical device extensions.
 ///
-/// Can be overriden in root
-pub const max_extensions = if (@hasDecl(root, "physical_device_max_extensions"))
+/// Can be overriden in root.
+pub const max_extension_count = if (@hasDecl(root, "physical_device_max_extensions"))
     root.physical_device_max_extensions
 else
     16;
+
+/// Max number of unique queues. At this time: graphics, present, compute and transfer.
+pub const max_unique_queue_count = 4;
 
 handle: vk.PhysicalDevice,
 surface: vk.SurfaceKHR,
@@ -28,7 +31,7 @@ features: vk.PhysicalDeviceFeatures,
 features_11: vk.PhysicalDeviceVulkan11Features,
 features_12: vk.PhysicalDeviceVulkan12Features,
 features_13: vk.PhysicalDeviceVulkan13Features,
-extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8,
+extensions_array: [max_extension_count][vk.MAX_EXTENSION_NAME_SIZE]u8,
 extension_count: usize,
 graphics_queue_index: u32,
 present_queue_index: u32,
@@ -36,42 +39,42 @@ transfer_queue_index: ?u32,
 compute_queue_index: ?u32,
 
 pub const QueuePreference = enum {
-    /// No queue will be created
+    /// No queue will be created.
     none,
     /// Dedicated (for transfer -> without compute, for computer -> without transfer).
-    /// Both will not be the same family as the graphics queue
+    /// Both will not be the same family as the graphics queue.
     dedicated,
     /// Separate from graphics family.
     /// This mode will try to find a dedicated, but will fallback to a common for
-    /// transfer and compute if no dedicated is found
+    /// transfer and compute if no dedicated is found.
     separate,
 };
 
 pub const SelectOptions = struct {
-    /// Vulkan render surface
+    /// Vulkan render surface.
     surface: vk.SurfaceKHR,
-    /// Name of the device to select
+    /// Name of the device to select.
     name: ?[*:0]const u8 = null,
-    /// Required Vulkan version (minimum 1.1)
+    /// Required Vulkan version (minimum 1.1).
     required_api_version: u32 = vk.API_VERSION_1_1,
-    /// Prefered physical device type
+    /// Prefered physical device type.
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
-    /// Transfer queue preference
+    /// Transfer queue preference.
     transfer_queue: QueuePreference = .none,
-    /// Compute queue preference
+    /// Compute queue preference.
     compute_queue: QueuePreference = .none,
-    /// Required local memory size
+    /// Required local memory size.
     required_mem_size: vk.DeviceSize = 0,
-    /// Required physical device features
+    /// Required physical device features.
     required_features: vk.PhysicalDeviceFeatures = .{},
-    /// Required physical device feature version 1.1
+    /// Required physical device feature version 1.1.
     required_features_11: vk.PhysicalDeviceVulkan11Features = .{},
-    /// Required physical device feature version 1.2
+    /// Required physical device feature version 1.2.
     required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
-    /// Required physical device feature version 1.3
+    /// Required physical device feature version 1.3.
     required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
     /// Array of required physical device extensions to enable.
-    /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled
+    /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
 };
 
@@ -95,6 +98,7 @@ pub fn select(
     instance: *const Instance,
     options: SelectOptions,
 ) SelectError!PhysicalDevice {
+    std.debug.assert(instance.handle != .null_handle);
     std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
 
     if (options.required_features_12 != null and instance.api_version < vk.API_VERSION_1_2)
@@ -182,8 +186,10 @@ pub fn select(
     const selected = &physical_device_infos.items[0];
     if (!selected.suitable) return error.NoSuitableDeviceFound;
 
-    var extensions_array: [max_extensions][vk.MAX_EXTENSION_NAME_SIZE]u8 = undefined;
+    var extensions_array: [max_extension_count][vk.MAX_EXTENSION_NAME_SIZE]u8 = undefined;
     var extension_count: usize = 0;
+
+    std.debug.assert(max_extension_count >= 16);
 
     for (options.required_extensions) |ext| {
         setExtension(&extensions_array[extension_count], ext);
@@ -229,16 +235,31 @@ pub fn select(
     };
 }
 
-/// Returns the physical device's name
+/// Returns the physical device's name.
 pub fn name(self: *const PhysicalDevice) []const u8 {
     const str: [*:0]const u8 = @ptrCast(&self.properties.device_name);
     return std.mem.span(str);
 }
 
-/// Returns an array of the extensions required to be enabled when creating the logical device
+/// Returns an array of the extensions required to be enabled when creating the logical device.
 ///
-/// Caller owns the memory
+/// Buffer is used as the output.
 pub fn requiredExtensions(
+    self: *const PhysicalDevice,
+    buffer: [][*:0]const u8,
+) [][*:0]const u8 {
+    std.debug.assert(buffer.len >= self.extension_count);
+
+    for (0..self.extension_count) |i| {
+        buffer[i] = @ptrCast(&self.extensions_array[i]);
+    }
+    return buffer[0..self.extension_count];
+}
+
+/// Returns an array of the extensions required to be enabled when creating the logical device.
+///
+/// Caller owns the memory.
+pub fn requiredExtensionsAlloc(
     self: *const PhysicalDevice,
     allocator: std.mem.Allocator,
 ) error{OutOfMemory}![][*:0]const u8 {

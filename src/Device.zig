@@ -34,16 +34,23 @@ const CreateError = Error ||
     InstanceDispatch.CreateDeviceError;
 
 pub fn create(
-    allocator: std.mem.Allocator,
     physical_device: *const PhysicalDevice,
     p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Device {
-    const queue_create_infos = try createQueueInfos(allocator, physical_device);
-    defer allocator.free(queue_create_infos);
+    std.debug.assert(physical_device.handle != .null_handle);
 
-    const enabled_extensions = try physical_device.requiredExtensions(allocator);
-    defer allocator.free(enabled_extensions);
+    const fixed_buffer_size =
+        PhysicalDevice.max_unique_queue_count * @sizeOf(vk.DeviceQueueCreateInfo) +
+        PhysicalDevice.max_unique_queue_count * 128; // Space for hashmap data
+    var fixed_buffer: [fixed_buffer_size]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&fixed_buffer);
+    const allocator = fba.allocator();
+
+    const queue_create_infos = try createQueueInfos(allocator, physical_device);
+
+    var extension_buffer: [PhysicalDevice.max_extension_count][*:0]u8 = undefined;
+    const enabled_extensions = physical_device.requiredExtensions(&extension_buffer);
 
     var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };
     var features_11 = physical_device.features_11;
@@ -140,12 +147,12 @@ fn printEnabledFeatures(comptime T: type, features: T) void {
     }
 }
 
+// Allocator must be a fixed buffer allocator.
 fn createQueueInfos(
     allocator: std.mem.Allocator,
     physical_device: *const PhysicalDevice,
 ) ![]vk.DeviceQueueCreateInfo {
     var unique_queue_families = std.AutoHashMap(u32, void).init(allocator);
-    defer unique_queue_families.deinit();
 
     try unique_queue_families.put(physical_device.graphics_queue_index, {});
     try unique_queue_families.put(physical_device.present_queue_index, {});
@@ -156,8 +163,10 @@ fn createQueueInfos(
         try unique_queue_families.put(idx, {});
     }
 
-    var queue_create_infos = std.ArrayList(vk.DeviceQueueCreateInfo).init(allocator);
-    errdefer queue_create_infos.deinit();
+    var queue_create_infos = try std.ArrayList(vk.DeviceQueueCreateInfo).initCapacity(
+        allocator,
+        PhysicalDevice.max_unique_queue_count,
+    );
 
     const queue_priorities = [_]f32{1};
 
@@ -171,5 +180,5 @@ fn createQueueInfos(
         try queue_create_infos.append(queue_create_info);
     }
 
-    return queue_create_infos.toOwnedSlice();
+    return queue_create_infos.items;
 }

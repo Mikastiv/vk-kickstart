@@ -86,7 +86,7 @@ pub fn main() !void {
         .ray_tracing_pipeline = vk.TRUE,
     };
 
-    const device = try vkk.Device.create(allocator, &physical_device, @ptrCast(&rt_features), null);
+    const device = try vkk.Device.create(&physical_device, @ptrCast(&rt_features), null);
     defer device.destroy();
 
     var swapchain = try vkk.Swapchain.create(allocator, &device, surface, .{
@@ -94,15 +94,19 @@ pub fn main() !void {
     });
     defer swapchain.destroy();
 
-    var images = try swapchain.getImages(allocator);
+    var images = try allocator.alloc(vk.Image, swapchain.image_count);
     defer allocator.free(images);
 
-    var image_views = try swapchain.getImageViews(allocator, images);
+    try swapchain.getImages(images);
+
+    var image_views = try allocator.alloc(vk.ImageView, swapchain.image_count);
+    defer allocator.free(image_views);
+
+    try swapchain.getImageViews(images, image_views);
     defer {
         for (image_views) |view| {
             vkd().destroyImageView(device.handle, view, null);
         }
-        allocator.free(image_views);
     }
 
     const render_pass = try createRenderPass(device.handle, swapchain.image_format);
@@ -270,14 +274,12 @@ fn recreateSwapchain(
     for (image_views.*) |view| {
         vkd().destroyImageView(device.handle, view, null);
     }
-    allocator.free(image_views.*);
     old_swapchain.destroy();
 
-    allocator.free(images.*);
     destroyFramebuffers(allocator, device.handle, framebuffers.*);
 
-    images.* = try swapchain.getImages(allocator);
-    image_views.* = try swapchain.getImageViews(allocator, images.*);
+    try swapchain.getImages(images.*);
+    try swapchain.getImageViews(images.*, image_views.*);
     framebuffers.* = try createFramebuffers(
         allocator,
         device.handle,
