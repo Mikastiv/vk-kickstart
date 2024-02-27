@@ -11,11 +11,25 @@ const vkb = vkk.dispatch.vkb; // Base dispatch
 const vki = vkk.dispatch.vki; // Instance dispatch
 const vkd = vkk.dispatch.vkd; // Device dispatch
 
-// can override vulkan dispatch to choose what functions are loaded
+// Can override vulkan dispatch to choose what functions are loaded.
 pub const vulkan_dispatch = struct {
     // pub const base = dispatch.base;
     // pub const instance = dispatch.instance;
     pub const device = dispatch.device;
+};
+
+// Instance overrides
+pub const instance_override = struct {
+    // pub const max_extensions = 64;
+    // pub const max_layers = 64;
+};
+
+// Physical device overrides
+pub const physical_device_override = struct {
+    // pub const max_handles = 6;
+    // pub const max_enabled_extensions = 16;
+    // pub const max_available_extensions = 512;
+    // pub const max_queue_families = 16;
 };
 
 const max_frames_in_flight = 2;
@@ -53,7 +67,7 @@ pub fn main() !void {
     const window = try Window.init(allocator, window_width, window_height, "vk-kickstart");
     defer window.deinit(allocator);
 
-    const instance = try vkk.Instance.create(allocator, c.glfwGetInstanceProcAddress, .{
+    const instance = try vkk.Instance.create(c.glfwGetInstanceProcAddress, .{
         .required_api_version = vk.API_VERSION_1_3,
     });
     defer instance.destroy();
@@ -61,7 +75,7 @@ pub fn main() !void {
     const surface = try window.createSurface(instance.handle);
     defer vki().destroySurfaceKHR(instance.handle, surface, instance.allocation_callbacks);
 
-    const physical_device = try vkk.PhysicalDevice.select(allocator, &instance, .{
+    const physical_device = try vkk.PhysicalDevice.select(&instance, .{
         .surface = surface,
         .transfer_queue = .dedicated,
         .required_api_version = vk.API_VERSION_1_2,

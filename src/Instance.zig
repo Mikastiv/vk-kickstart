@@ -4,6 +4,7 @@ const vk = @import("vulkan-zig");
 const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
 const Instance = @This();
+const root = @import("root");
 
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
@@ -15,6 +16,29 @@ const BaseDispatch = dispatch.BaseDispatch;
 const InstanceDispatch = dispatch.InstanceDispatch;
 
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
+
+const instance_override = if (@hasDecl(root, "instance_override")) root.vulkan_dispatch else struct {};
+
+/// Max number of available instance extensions.
+///
+/// Can be overriden in root.
+const max_extensions = if (@hasDecl(instance_override, "max_extensions"))
+    instance_override.max_extensions
+else
+    64;
+
+/// Max number of available instance layers.
+///
+/// Can be overriden in root.
+const max_layers = if (@hasDecl(instance_override, "max_layers"))
+    instance_override.max_layers
+else
+    64;
+
+const AvailableExtensionsArray = std.BoundedArray(vk.ExtensionProperties, max_extensions);
+const AvailableLayersArray = std.BoundedArray(vk.LayerProperties, max_layers);
+const RequiredExtensionsArray = std.BoundedArray([*:0]const u8, max_extensions);
+const RequiredLayersArray = std.BoundedArray([*:0]const u8, max_layers);
 
 handle: vk.Instance,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
@@ -62,7 +86,7 @@ pub const CreateOptions = struct {
 };
 
 const Error = error{
-    OutOfMemory,
+    Overflow,
     CommandLoadFailure,
     UnsupportedInstanceVersion,
     RequiredVersionNotAvailable,
@@ -83,7 +107,6 @@ pub const CreateError = Error ||
     InstanceDispatch.CreateDebugUtilsMessengerEXTError;
 
 pub fn create(
-    allocator: std.mem.Allocator,
     loader: anytype,
     options: CreateOptions,
 ) CreateError!Instance {
@@ -100,25 +123,17 @@ pub fn create(
         .api_version = api_version,
     };
 
-    const available_extensions = try getAvailableExtensions(allocator);
-    defer allocator.free(available_extensions);
+    var available_extensions = try AvailableExtensionsArray.init(0);
+    try getAvailableExtensions(&available_extensions);
 
-    const available_layers = try getAvailableLayers(allocator);
-    defer allocator.free(available_layers);
+    var available_layers = try AvailableLayersArray.init(0);
+    try getAvailableLayers(&available_layers);
 
-    var required_extensions = try getRequiredExtensions(allocator, options.required_extensions, available_extensions);
-    defer required_extensions.deinit();
+    var required_extensions = try RequiredExtensionsArray.init(0);
+    try getRequiredExtensions(options.required_extensions, available_extensions.constSlice(), &required_extensions);
 
-    const portability_enumeration_support = isExtensionAvailable(
-        available_extensions,
-        vk.extension_info.khr_portability_enumeration.name,
-    );
-    if (portability_enumeration_support) {
-        try required_extensions.append(vk.extension_info.khr_portability_enumeration.name);
-    }
-
-    var required_layers = try getRequiredLayers(allocator, options.required_layers, available_layers);
-    defer required_layers.deinit();
+    var required_layers = try RequiredLayersArray.init(0);
+    try getRequiredLayers(options.required_layers, available_layers.constSlice(), &required_layers);
 
     const p_next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
         .p_next = options.p_next_chain,
@@ -128,13 +143,18 @@ pub fn create(
         .p_user_data = options.debug_user_data,
     } else options.p_next_chain;
 
+    const portability_enumeration_support = isExtensionAvailable(
+        available_extensions.constSlice(),
+        vk.extension_info.khr_portability_enumeration.name,
+    );
+
     const instance_info = vk.InstanceCreateInfo{
         .flags = if (portability_enumeration_support) .{ .enumerate_portability_bit_khr = true } else .{},
         .p_application_info = &app_info,
-        .enabled_extension_count = @as(u32, @intCast(required_extensions.items.len)),
-        .pp_enabled_extension_names = required_extensions.items.ptr,
-        .enabled_layer_count = @as(u32, @intCast(required_layers.items.len)),
-        .pp_enabled_layer_names = required_layers.items.ptr,
+        .enabled_extension_count = @as(u32, @intCast(required_extensions.len)),
+        .pp_enabled_extension_names = &required_extensions.buffer,
+        .enabled_layer_count = @as(u32, @intCast(required_layers.len)),
+        .pp_enabled_layer_names = &required_layers.buffer,
         .p_next = p_next,
     };
 
@@ -150,24 +170,24 @@ pub fn create(
         log.debug("validation layers: {s}", .{if (build_options.enable_validation) "enabled" else "disabled"});
 
         log.debug("available extensions:", .{});
-        for (available_extensions) |ext| {
+        for (available_extensions.constSlice()) |ext| {
             const ext_name: [*:0]const u8 = @ptrCast(&ext.extension_name);
             log.debug("- {s}", .{ext_name});
         }
 
         log.debug("available layers:", .{});
-        for (available_layers) |layer| {
+        for (available_layers.constSlice()) |layer| {
             const layer_name: [*:0]const u8 = @ptrCast(&layer.layer_name);
             log.debug("- {s}", .{layer_name});
         }
 
         log.debug("enabled extensions:", .{});
-        for (required_extensions.items) |ext| {
+        for (required_extensions.constSlice()) |ext| {
             log.debug("- {s}", .{ext});
         }
 
         log.debug("enabled layers:", .{});
-        for (required_layers.items) |layer| {
+        for (required_layers.constSlice()) |layer| {
             log.debug("- {s}", .{layer});
         }
     }
@@ -252,32 +272,31 @@ fn isExtensionAvailable(
 }
 
 fn addExtension(
-    extensions: *std.ArrayList([*:0]const u8),
     available_extensions: []const vk.ExtensionProperties,
     new_extension: [*:0]const u8,
+    buffer: *RequiredExtensionsArray,
 ) !bool {
     if (isExtensionAvailable(available_extensions, new_extension)) {
-        try extensions.append(new_extension);
+        try buffer.append(new_extension);
         return true;
     }
     return false;
 }
 
 fn getRequiredExtensions(
-    allocator: std.mem.Allocator,
     config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
-) !std.ArrayList([*:0]const u8) {
-    var extensions = std.ArrayList([*:0]const u8).init(allocator);
-    errdefer extensions.deinit();
+    buffer: *RequiredExtensionsArray,
+) !void {
+    std.debug.assert(buffer.buffer.len >= max_extensions);
 
     for (config_extensions) |ext| {
-        if (!try addExtension(&extensions, available_extensions, ext)) {
+        if (!try addExtension(available_extensions, ext, buffer)) {
             return error.RequestedExtensionNotAvailable;
         }
     }
 
-    if (!try addExtension(&extensions, available_extensions, vk.extension_info.khr_surface.name)) {
+    if (!try addExtension(available_extensions, vk.extension_info.khr_surface.name, buffer)) {
         return error.SurfaceExtensionNotAvailable;
     }
 
@@ -294,18 +313,18 @@ fn getRequiredExtensions(
 
     var added_one = false;
     for (windowing_extensions) |ext| {
-        added_one = try addExtension(&extensions, available_extensions, ext) or added_one;
+        added_one = try addExtension(available_extensions, ext, buffer) or added_one;
     }
 
     if (!added_one) return error.WindowingExtensionNotAvailable;
 
     if (build_options.enable_validation) {
-        if (!try addExtension(&extensions, available_extensions, vk.extension_info.ext_debug_utils.name)) {
+        if (!try addExtension(available_extensions, vk.extension_info.ext_debug_utils.name, buffer)) {
             return error.DebugMessengerExtensionNotAvailable;
         }
     }
 
-    return extensions;
+    _ = addExtension(available_extensions, vk.extension_info.khr_portability_enumeration.name, buffer) catch {};
 }
 
 fn isLayerAvailable(
@@ -322,72 +341,67 @@ fn isLayerAvailable(
 }
 
 fn addLayer(
-    layers: *std.ArrayList([*:0]const u8),
     available_layers: []const vk.LayerProperties,
     new_layer: [*:0]const u8,
+    buffer: *RequiredLayersArray,
 ) !bool {
     if (isLayerAvailable(available_layers, new_layer)) {
-        try layers.append(new_layer);
+        try buffer.append(new_layer);
         return true;
     }
     return false;
 }
 
 fn getRequiredLayers(
-    allocator: std.mem.Allocator,
     config_layers: []const [*:0]const u8,
     available_layers: []const vk.LayerProperties,
-) !std.ArrayList([*:0]const u8) {
-    var layers = std.ArrayList([*:0]const u8).init(allocator);
-    errdefer layers.deinit();
+    buffer: *RequiredLayersArray,
+) !void {
+    std.debug.assert(buffer.buffer.len >= max_layers);
 
     for (config_layers) |layer| {
-        if (!try addLayer(&layers, available_layers, layer)) {
+        if (!try addLayer(available_layers, layer, buffer)) {
             return error.RequestedLayerNotAvailable;
         }
     }
 
     if (build_options.enable_validation) {
         for (validation_layers) |layer| {
-            if (!try addLayer(&layers, available_layers, layer)) {
+            if (!try addLayer(available_layers, layer, buffer)) {
                 return error.ValidationLayersNotAvailable;
             }
         }
     }
-
-    return layers;
 }
 
-fn getAvailableExtensions(allocator: std.mem.Allocator) ![]vk.ExtensionProperties {
+fn getAvailableExtensions(buffer: *AvailableExtensionsArray) !void {
     var extension_count: u32 = 0;
     var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
     if (result != .success) return error.EnumerateExtensionsFailed;
 
-    const extension_properties = try allocator.alloc(vk.ExtensionProperties, extension_count);
-    errdefer allocator.free(extension_properties);
+    std.debug.assert(buffer.buffer.len >= extension_count);
+
+    try buffer.resize(extension_count);
 
     while (true) {
-        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, extension_properties.ptr);
+        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, &buffer.buffer);
         if (result == .success) break;
     }
-
-    return extension_properties;
 }
 
-fn getAvailableLayers(allocator: std.mem.Allocator) ![]vk.LayerProperties {
+fn getAvailableLayers(buffer: *AvailableLayersArray) !void {
     var layer_count: u32 = 0;
     var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
     if (result != .success) return error.EnumerateLayersFailed;
 
-    const layer_properties = try allocator.alloc(vk.LayerProperties, layer_count);
-    errdefer allocator.free(layer_properties);
+    std.debug.assert(buffer.buffer.len >= layer_count);
+
+    try buffer.resize(layer_count);
 
     while (true) {
-        result = try vkb().enumerateInstanceLayerProperties(&layer_count, layer_properties.ptr);
+        result = try vkb().enumerateInstanceLayerProperties(&layer_count, &buffer.buffer);
         if (result == .success) break;
     }
-
-    return layer_properties;
 }
 
 fn getAppropriateApiVersion(required_version: u32) !u32 {

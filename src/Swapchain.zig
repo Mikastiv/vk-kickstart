@@ -83,6 +83,7 @@ pub fn create(
     options: CreateOptions,
 ) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
+    std.debug.assert(device.handle != .null_handle);
 
     const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device, surface);
     defer {
