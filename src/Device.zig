@@ -68,6 +68,18 @@ pub fn create(
         features_11.p_next = p_next_chain;
     }
 
+    const device_info = vk.DeviceCreateInfo{
+        .queue_create_info_count = @intCast(queue_create_infos.len),
+        .p_queue_create_infos = queue_create_infos.ptr,
+        .enabled_extension_count = @intCast(enabled_extensions.len),
+        .pp_enabled_extension_names = enabled_extensions.ptr,
+        .p_next = &features,
+    };
+
+    const handle = try vki().createDevice(physical_device.handle, &device_info, allocation_callbacks);
+    try dispatch.initDeviceDispatch(handle);
+    errdefer vkd().destroyDevice(handle, allocation_callbacks);
+
     if (build_options.verbose) {
         log.debug("----- device creation -----", .{});
         log.debug("queue count: {d}", .{queue_create_infos.len});
@@ -98,18 +110,6 @@ pub fn create(
             printEnabledFeatures(vk.PhysicalDeviceVulkan13Features, features_13);
         }
     }
-
-    const device_info = vk.DeviceCreateInfo{
-        .queue_create_info_count = @intCast(queue_create_infos.len),
-        .p_queue_create_infos = queue_create_infos.ptr,
-        .enabled_extension_count = @intCast(enabled_extensions.len),
-        .pp_enabled_extension_names = enabled_extensions.ptr,
-        .p_next = &features,
-    };
-
-    const handle = try vki().createDevice(physical_device.handle, &device_info, allocation_callbacks);
-    try dispatch.initDeviceDispatch(handle);
-    errdefer vkd().destroyDevice(handle, allocation_callbacks);
 
     const graphics_queue = vkd().getDeviceQueue(handle, physical_device.graphics_queue_index, 0);
     const present_queue = vkd().getDeviceQueue(handle, physical_device.present_queue_index, 0);

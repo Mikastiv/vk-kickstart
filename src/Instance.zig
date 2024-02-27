@@ -158,6 +158,13 @@ pub fn create(
         .p_next = p_next,
     };
 
+    const instance = try vkb().createInstance(&instance_info, options.allocation_callbacks);
+    try dispatch.initInstanceDispatch(instance);
+    errdefer vki().destroyInstance(instance, options.allocation_callbacks);
+
+    const debug_messenger = try createDebugMessenger(instance, options);
+    errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
+
     if (build_options.verbose) {
         log.debug("----- instance creation -----", .{});
 
@@ -191,13 +198,6 @@ pub fn create(
             log.debug("- {s}", .{layer});
         }
     }
-
-    const instance = try vkb().createInstance(&instance_info, options.allocation_callbacks);
-    try dispatch.initInstanceDispatch(instance);
-    errdefer vki().destroyInstance(instance, options.allocation_callbacks);
-
-    const debug_messenger = try createDebugMessenger(instance, options);
-    errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
 
     return .{
         .handle = instance,

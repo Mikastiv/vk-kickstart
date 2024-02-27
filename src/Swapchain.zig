@@ -17,6 +17,7 @@ handle: vk.SwapchainKHR,
 device: vk.Device,
 surface: vk.SurfaceKHR,
 image_count: u32,
+min_image_count: u32,
 image_format: vk.Format,
 image_usage: vk.ImageUsageFlags,
 color_space: vk.ColorSpaceKHR,
@@ -68,6 +69,7 @@ const Error = error{
     UsageFlagsNotSupported,
     GetPhysicalDeviceFormatsFailed,
     GetPhysicalDevicePresentModesFailed,
+    GetSwapchainImageCountFailed,
 };
 
 pub const CreateError = Error ||
@@ -91,7 +93,7 @@ pub fn create(
         allocator.free(surface_support.present_modes);
     }
 
-    const image_count = selectMinImageCount(&surface_support.capabilities, options.desired_min_image_count);
+    const min_image_count = selectMinImageCount(&surface_support.capabilities, options.desired_min_image_count);
     const format = pickSurfaceFormat(surface_support.formats, options.desired_formats);
     const present_mode = pickPresentMode(surface_support.present_modes, options.desired_present_modes);
     const extent = pickExtent(&surface_support.capabilities, options.desired_extent);
@@ -117,7 +119,7 @@ pub fn create(
         .p_next = options.p_next_chain,
         .flags = options.create_flags,
         .surface = surface,
-        .min_image_count = image_count,
+        .min_image_count = min_image_count,
         .image_format = format.format,
         .image_color_space = format.color_space,
         .image_extent = extent,
@@ -133,6 +135,13 @@ pub fn create(
         .old_swapchain = if (options.old_swapchain) |old| old else .null_handle,
     };
 
+    const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, options.allocation_callbacks);
+    errdefer vkd().destroySwapchainKHR(device.handle, swapchain, options.allocation_callbacks);
+
+    var image_count: u32 = undefined;
+    const result = try vkd().getSwapchainImagesKHR(device.handle, swapchain, &image_count, null);
+    if (result != .success) return error.GetSwapchainImageCountFailed;
+
     if (build_options.verbose) {
         log.debug("----- swapchain creation -----", .{});
         log.debug("image count: {d}", .{image_count});
@@ -142,13 +151,11 @@ pub fn create(
         log.debug("extent: {d}x{d}", .{ extent.width, extent.height });
     }
 
-    const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, options.allocation_callbacks);
-    errdefer vkd().destroySwapchainKHR(device.handle, swapchain, options.allocation_callbacks);
-
     return .{
         .device = device.handle,
         .handle = swapchain,
         .surface = surface,
+        .min_image_count = min_image_count,
         .image_count = image_count,
         .image_format = format.format,
         .color_space = format.color_space,
@@ -169,13 +176,11 @@ pub const GetImagesError = error{GetSwapchainImagesFailed} || DeviceDispatch.Get
 ///
 /// Buffer is used as the output.
 pub fn getImages(self: *const Swapchain, buffer: []vk.Image) GetImagesError!void {
-    std.debug.assert(buffer.len == self.image_count);
-
     var image_count: u32 = 0;
     var result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, null);
     if (result != .success) return error.GetSwapchainImagesFailed;
 
-    std.debug.assert(image_count == self.image_count);
+    std.debug.assert(image_count == buffer.len);
 
     while (true) {
         result = try vkd().getSwapchainImagesKHR(self.device, self.handle, &image_count, buffer.ptr);
