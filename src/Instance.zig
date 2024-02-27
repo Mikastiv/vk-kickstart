@@ -17,7 +17,7 @@ const InstanceDispatch = dispatch.InstanceDispatch;
 
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
-const instance_override = if (@hasDecl(root, "instance_override")) root.vulkan_dispatch else struct {};
+const instance_override = if (@hasDecl(root, "instance_override")) root.instance_override else struct {};
 
 /// Max number of available instance extensions.
 ///
@@ -123,17 +123,10 @@ pub fn create(
         .api_version = api_version,
     };
 
-    var available_extensions = try AvailableExtensionsArray.init(0);
-    try getAvailableExtensions(&available_extensions);
-
-    var available_layers = try AvailableLayersArray.init(0);
-    try getAvailableLayers(&available_layers);
-
-    var required_extensions = try RequiredExtensionsArray.init(0);
-    try getRequiredExtensions(options.required_extensions, available_extensions.constSlice(), &required_extensions);
-
-    var required_layers = try RequiredLayersArray.init(0);
-    try getRequiredLayers(options.required_layers, available_layers.constSlice(), &required_layers);
+    const available_extensions = try getAvailableExtensions();
+    const available_layers = try getAvailableLayers();
+    const required_extensions = try getRequiredExtensions(options.required_extensions, available_extensions.constSlice());
+    const required_layers = try getRequiredLayers(options.required_layers, available_layers.constSlice());
 
     const p_next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
         .p_next = options.p_next_chain,
@@ -286,17 +279,17 @@ fn addExtension(
 fn getRequiredExtensions(
     config_extensions: []const [*:0]const u8,
     available_extensions: []const vk.ExtensionProperties,
-    buffer: *RequiredExtensionsArray,
-) !void {
-    std.debug.assert(buffer.buffer.len >= max_extensions);
+) !RequiredExtensionsArray {
+    var required_extensions = try RequiredExtensionsArray.init(0);
+    std.debug.assert(required_extensions.buffer.len >= max_extensions);
 
     for (config_extensions) |ext| {
-        if (!try addExtension(available_extensions, ext, buffer)) {
+        if (!try addExtension(available_extensions, ext, &required_extensions)) {
             return error.RequestedExtensionNotAvailable;
         }
     }
 
-    if (!try addExtension(available_extensions, vk.extension_info.khr_surface.name, buffer)) {
+    if (!try addExtension(available_extensions, vk.extension_info.khr_surface.name, &required_extensions)) {
         return error.SurfaceExtensionNotAvailable;
     }
 
@@ -313,18 +306,20 @@ fn getRequiredExtensions(
 
     var added_one = false;
     for (windowing_extensions) |ext| {
-        added_one = try addExtension(available_extensions, ext, buffer) or added_one;
+        added_one = try addExtension(available_extensions, ext, &required_extensions) or added_one;
     }
 
     if (!added_one) return error.WindowingExtensionNotAvailable;
 
     if (build_options.enable_validation) {
-        if (!try addExtension(available_extensions, vk.extension_info.ext_debug_utils.name, buffer)) {
+        if (!try addExtension(available_extensions, vk.extension_info.ext_debug_utils.name, &required_extensions)) {
             return error.DebugMessengerExtensionNotAvailable;
         }
     }
 
-    _ = addExtension(available_extensions, vk.extension_info.khr_portability_enumeration.name, buffer) catch {};
+    _ = addExtension(available_extensions, vk.extension_info.khr_portability_enumeration.name, &required_extensions) catch {};
+
+    return required_extensions;
 }
 
 fn isLayerAvailable(
@@ -355,53 +350,55 @@ fn addLayer(
 fn getRequiredLayers(
     config_layers: []const [*:0]const u8,
     available_layers: []const vk.LayerProperties,
-    buffer: *RequiredLayersArray,
-) !void {
-    std.debug.assert(buffer.buffer.len >= max_layers);
+) !RequiredLayersArray {
+    var required_layers = try RequiredLayersArray.init(0);
+    std.debug.assert(required_layers.buffer.len >= max_layers);
 
     for (config_layers) |layer| {
-        if (!try addLayer(available_layers, layer, buffer)) {
+        if (!try addLayer(available_layers, layer, &required_layers)) {
             return error.RequestedLayerNotAvailable;
         }
     }
 
     if (build_options.enable_validation) {
         for (validation_layers) |layer| {
-            if (!try addLayer(available_layers, layer, buffer)) {
+            if (!try addLayer(available_layers, layer, &required_layers)) {
                 return error.ValidationLayersNotAvailable;
             }
         }
     }
+
+    return required_layers;
 }
 
-fn getAvailableExtensions(buffer: *AvailableExtensionsArray) !void {
+fn getAvailableExtensions() !AvailableExtensionsArray {
     var extension_count: u32 = 0;
     var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
     if (result != .success) return error.EnumerateExtensionsFailed;
 
-    std.debug.assert(buffer.buffer.len >= extension_count);
-
-    try buffer.resize(extension_count);
+    var extensions = try AvailableExtensionsArray.init(extension_count);
 
     while (true) {
-        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, &buffer.buffer);
+        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, &extensions.buffer);
         if (result == .success) break;
     }
+
+    return extensions;
 }
 
-fn getAvailableLayers(buffer: *AvailableLayersArray) !void {
+fn getAvailableLayers() !AvailableLayersArray {
     var layer_count: u32 = 0;
     var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
     if (result != .success) return error.EnumerateLayersFailed;
 
-    std.debug.assert(buffer.buffer.len >= layer_count);
-
-    try buffer.resize(layer_count);
+    var layers = try AvailableLayersArray.init(layer_count);
 
     while (true) {
-        result = try vkb().enumerateInstanceLayerProperties(&layer_count, &buffer.buffer);
+        result = try vkb().enumerateInstanceLayerProperties(&layer_count, &layers.buffer);
         if (result == .success) break;
     }
+
+    return layers;
 }
 
 fn getAppropriateApiVersion(required_version: u32) !u32 {

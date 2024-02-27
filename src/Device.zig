@@ -48,8 +48,8 @@ pub fn create(
 
     const queue_create_infos = try createQueueInfos(&fba, physical_device);
 
-    var extension_buffer: [PhysicalDevice.max_enabled_extensions][*:0]u8 = undefined;
-    const enabled_extensions = physical_device.getExtensions(&extension_buffer);
+    var extensions_buffer: [PhysicalDevice.max_enabled_extensions][*:0]u8 = undefined;
+    const enabled_extensions = physical_device.getExtensions(&extensions_buffer);
 
     var features = vk.PhysicalDeviceFeatures2{ .features = physical_device.features };
     var features_11 = physical_device.features_11;

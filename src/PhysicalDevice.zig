@@ -12,7 +12,7 @@ const vki = dispatch.vki;
 
 const InstanceDispatch = dispatch.InstanceDispatch;
 
-const physical_device_override = if (@hasDecl(root, "physical_device_override")) root.vulkan_dispatch else struct {};
+const physical_device_override = if (@hasDecl(root, "physical_device_override")) root.physical_device_override else struct {};
 
 /// Max number of physical devices.
 ///
@@ -51,6 +51,7 @@ pub const max_unique_queues = 4;
 
 pub const ExtensionArray = std.BoundedArray([vk.MAX_EXTENSION_NAME_SIZE]u8, max_enabled_extensions);
 
+const PhysicalDeviceHandlesArray = std.BoundedArray(vk.PhysicalDevice, max_handles);
 const PhysicalDeviceInfosArray = std.BoundedArray(PhysicalDeviceInfo, max_handles);
 const PhysicalDeviceExtensionsArray = std.BoundedArray(vk.ExtensionProperties, max_available_extensions);
 const PhysicalDeviceQueueFamiliesArray = std.BoundedArray(vk.QueueFamilyProperties, max_queue_families);
@@ -137,12 +138,10 @@ pub fn select(
     if (options.required_features_13 != null and instance.api_version < vk.API_VERSION_1_3)
         return error.Features13UnsupportedByInstance;
 
-    var physical_device_handles_buffer: [max_handles]vk.PhysicalDevice = undefined;
-    const physical_device_handles = try getPhysicalDevices(instance.handle, &physical_device_handles_buffer);
+    const physical_device_handles = try getPhysicalDevices(instance.handle);
 
     var physical_device_infos = try PhysicalDeviceInfosArray.init(0);
-
-    for (physical_device_handles) |handle| {
+    for (physical_device_handles.constSlice()) |handle| {
         const physical_device_info = try getPhysicalDeviceInfo(handle, options.surface, instance.api_version);
         try physical_device_infos.append(physical_device_info);
     }
@@ -734,17 +733,17 @@ fn getPhysicalDeviceInfo(
     };
 }
 
-fn getPhysicalDevices(instance: vk.Instance, buffer: []vk.PhysicalDevice) ![]vk.PhysicalDevice {
+fn getPhysicalDevices(instance: vk.Instance) !PhysicalDeviceHandlesArray {
     var device_count: u32 = 0;
     var result = try vki().enumeratePhysicalDevices(instance, &device_count, null);
     if (result != .success) return error.EnumeratePhysicalDevicesFailed;
 
-    std.debug.assert(buffer.len >= device_count);
+    var physical_devices = try PhysicalDeviceHandlesArray.init(device_count);
 
     while (true) {
-        result = try vki().enumeratePhysicalDevices(instance, &device_count, buffer.ptr);
+        result = try vki().enumeratePhysicalDevices(instance, &device_count, &physical_devices.buffer);
         if (result == .success) break;
     }
 
-    return buffer[0..device_count];
+    return physical_devices;
 }

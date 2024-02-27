@@ -4,6 +4,7 @@ const vk = @import("vulkan-zig");
 const Device = @import("Device.zig");
 const dispatch = @import("dispatch.zig");
 const Swapchain = @This();
+const root = @import("root");
 
 const log = @import("log.zig").vk_kickstart_log;
 
@@ -12,6 +13,22 @@ const vkd = dispatch.vkd;
 
 const InstanceDispatch = dispatch.InstanceDispatch;
 const DeviceDispatch = dispatch.DeviceDispatch;
+
+const swapchain_override = if (@hasDecl(root, "swapchain_override")) root.swapchain_override else struct {};
+
+/// Max number of surface formats.
+///
+/// Can be overriden in root.
+pub const max_surface_formats = if (@hasDecl(swapchain_override, "max_surface_formats"))
+    swapchain_override.max_surface_formats
+else
+    32;
+
+/// Max number of present modes.
+pub const max_present_modes = @typeInfo(vk.PresentModeKHR).Enum.fields.len;
+
+const SurfaceFormatsArray = std.BoundedArray(vk.SurfaceFormatKHR, max_surface_formats);
+const PresentModesArray = std.BoundedArray(vk.PresentModeKHR, max_present_modes);
 
 handle: vk.SwapchainKHR,
 device: vk.Device,
@@ -65,7 +82,7 @@ pub const CreateOptions = struct {
 };
 
 const Error = error{
-    OutOfMemory,
+    Overflow,
     UsageFlagsNotSupported,
     GetPhysicalDeviceFormatsFailed,
     GetPhysicalDevicePresentModesFailed,
@@ -79,7 +96,6 @@ pub const CreateError = Error ||
     DeviceDispatch.CreateSwapchainKHRError;
 
 pub fn create(
-    allocator: std.mem.Allocator,
     device: *const Device,
     surface: vk.SurfaceKHR,
     options: CreateOptions,
@@ -87,15 +103,11 @@ pub fn create(
     std.debug.assert(surface != .null_handle);
     std.debug.assert(device.handle != .null_handle);
 
-    const surface_support = try getSurfaceSupportDetails(allocator, device.physical_device, surface);
-    defer {
-        allocator.free(surface_support.formats);
-        allocator.free(surface_support.present_modes);
-    }
+    const surface_support = try getSurfaceSupportDetails(device.physical_device, surface);
 
     const min_image_count = selectMinImageCount(&surface_support.capabilities, options.desired_min_image_count);
-    const format = pickSurfaceFormat(surface_support.formats, options.desired_formats);
-    const present_mode = pickPresentMode(surface_support.present_modes, options.desired_present_modes);
+    const format = pickSurfaceFormat(surface_support.formats.constSlice(), options.desired_formats);
+    const present_mode = pickPresentMode(surface_support.present_modes.constSlice(), options.desired_present_modes);
     const extent = pickExtent(&surface_support.capabilities, options.desired_extent);
 
     const array_layer_count = if (surface_support.capabilities.max_image_array_layers < options.desired_array_layer_count)
@@ -378,12 +390,11 @@ fn selectMinImageCount(capabilities: *const vk.SurfaceCapabilitiesKHR, desired_m
 
 const SurfaceSupportDetails = struct {
     capabilities: vk.SurfaceCapabilitiesKHR,
-    formats: []const vk.SurfaceFormatKHR,
-    present_modes: []const vk.PresentModeKHR,
+    formats: SurfaceFormatsArray,
+    present_modes: PresentModesArray,
 };
 
 fn getSurfaceSupportDetails(
-    allocator: std.mem.Allocator,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
 ) !SurfaceSupportDetails {
@@ -393,11 +404,10 @@ fn getSurfaceSupportDetails(
     var result = try vki().getPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, null);
     if (result != .success) return error.GetPhysicalDeviceFormatsFailed;
 
-    const formats = try allocator.alloc(vk.SurfaceFormatKHR, format_count);
-    errdefer allocator.free(formats);
+    var formats = try SurfaceFormatsArray.init(format_count);
 
     while (true) {
-        result = try vki().getPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, formats.ptr);
+        result = try vki().getPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, &formats.buffer);
         if (result == .success) break;
     }
 
@@ -405,11 +415,10 @@ fn getSurfaceSupportDetails(
     result = try vki().getPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, null);
     if (result != .success) return error.GetPhysicalDevicePresentModesFailed;
 
-    const present_modes = try allocator.alloc(vk.PresentModeKHR, present_mode_count);
-    errdefer allocator.free(present_modes);
+    var present_modes = try PresentModesArray.init(present_mode_count);
 
     while (true) {
-        result = try vki().getPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, present_modes.ptr);
+        result = try vki().getPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, &present_modes.buffer);
         if (result == .success) break;
     }
 
