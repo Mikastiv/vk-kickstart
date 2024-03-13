@@ -3,7 +3,8 @@ const vk = @import("vulkan-zig");
 const build_options = @import("build_options");
 const root = @import("root");
 
-const dispatch_override = if (@hasDecl(root, "vulkan_dispatch")) root.vulkan_dispatch else struct {};
+const vkk_options = if (@hasDecl(root, "vkk_options")) root.vkk_options else struct {};
+const dispatch_override = if (@hasDecl(vkk_options, "vulkan_dispatch")) vkk_options.vulkan_dispatch else struct {};
 
 var base_init: bool = false;
 var base: BaseDispatch = undefined;

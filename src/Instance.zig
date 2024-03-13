@@ -17,7 +17,8 @@ const InstanceDispatch = dispatch.InstanceDispatch;
 
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
-const instance_override = if (@hasDecl(root, "instance_override")) root.instance_override else struct {};
+const vkk_options = if (@hasDecl(root, "vkk_options")) root.vkk_options else struct {};
+const instance_override = if (@hasDecl(vkk_options, "instance_override")) vkk_options.instance_override else struct {};
 
 /// Max number of available instance extensions.
 ///
