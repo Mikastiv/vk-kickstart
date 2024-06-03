@@ -5,8 +5,10 @@ const vkk = @import("vk-kickstart");
 const dispatch = @import("dispatch.zig");
 const Window = @import("Window.zig");
 const Shaders = @import("shaders");
-const Device = dispatch.Device;
-const Queue = dispatch.Queue;
+const GraphicsContext = @import("GraphicsContext.zig");
+const Device = GraphicsContext.Device;
+const Queue = GraphicsContext.Queue;
+const CommandBuffer = GraphicsContext.CommandBuffer;
 
 pub const vkk_options = struct {
     // Constants below remove the need for an allocator. They all have default
@@ -67,63 +69,18 @@ pub fn main() !void {
     const window = try Window.init(allocator, window_width, window_height, "vk-kickstart");
     defer window.deinit(allocator);
 
-    const instance_handle = try vkk.instance.create(
-        c.glfwGetInstanceProcAddress,
-        .{ .required_api_version = vk.API_VERSION_1_3 },
-        null,
-    );
-    const instance = try dispatch.initInstance(instance_handle, c.glfwGetInstanceProcAddress);
-    defer instance.destroyInstance(null);
+    var ctx = try GraphicsContext.init(allocator, window);
+    defer ctx.deinit(allocator);
 
-    const debug_messenger = try vkk.instance.createDebugMessenger(instance.handle, .{}, null);
-    defer vkk.instance.destroyDebugMessenger(instance.handle, debug_messenger, null);
-
-    const surface = try window.createSurface(instance.handle);
-    defer instance.destroySurfaceKHR(surface, null);
-
-    const physical_device = try vkk.PhysicalDevice.select(instance.handle, .{
-        .surface = surface,
-        .transfer_queue = .dedicated,
-        .required_api_version = vk.API_VERSION_1_2,
-        .required_extensions = &.{
-            vk.extensions.khr_ray_tracing_pipeline.name,
-            vk.extensions.khr_acceleration_structure.name,
-            vk.extensions.khr_deferred_host_operations.name,
-            vk.extensions.khr_buffer_device_address.name,
-            vk.extensions.ext_descriptor_indexing.name,
-        },
-        .required_features = .{
-            .sampler_anisotropy = vk.TRUE,
-        },
-        .required_features_12 = .{
-            .descriptor_indexing = vk.TRUE,
-        },
-    });
-
-    std.log.info("selected {s}", .{physical_device.name()});
-
-    var rt_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR{
-        .ray_tracing_pipeline = vk.TRUE,
-    };
-
-    const device_handle = try vkk.device.create(&physical_device, @ptrCast(&rt_features), null);
-    const device = try dispatch.initDevice(device_handle);
-    defer device.destroyDevice(null);
-
-    const graphics_queue_index = physical_device.graphics_queue_index;
-    const present_queue_index = physical_device.present_queue_index;
-    const graphics_queue_handle = device.getDeviceQueue(graphics_queue_index, 0);
-    const present_queue_handle = device.getDeviceQueue(present_queue_index, 0);
-    const graphics_queue = dispatch.initQueue(graphics_queue_handle);
-    const present_queue = dispatch.initQueue(present_queue_handle);
+    const device = ctx.device;
 
     var swapchain = try vkk.Swapchain.create(
         device.handle,
-        physical_device.handle,
-        surface,
+        ctx.physical_device.handle,
+        ctx.surface,
         .{
-            .graphics_queue_index = graphics_queue_index,
-            .present_queue_index = present_queue_index,
+            .graphics_queue_index = ctx.graphics_queue_index,
+            .present_queue_index = ctx.present_queue_index,
             .desired_extent = .{ .width = window_width, .height = window_height },
         },
     );
@@ -165,7 +122,7 @@ pub fn main() !void {
     const pipeline = try createGraphicsPipeline(device, render_pass, vertex_shader, fragment_shader, pipeline_layout);
     defer device.destroyPipeline(pipeline, null);
 
-    const command_pool = try createCommandPool(device, graphics_queue_index);
+    const command_pool = try createCommandPool(device, ctx.graphics_queue_index);
     defer device.destroyCommandPool(command_pool, null);
 
     const command_buffers = try createCommandBuffers(allocator, device, command_pool, max_frames_in_flight);
@@ -179,10 +136,7 @@ pub fn main() !void {
         if (should_recreate_swapchain) {
             swapchain = try recreateSwapchain(
                 allocator,
-                device,
-                physical_device.handle,
-                graphics_queue_index,
-                present_queue_index,
+                &ctx,
                 window,
                 &swapchain,
                 &images,
@@ -217,7 +171,7 @@ pub fn main() !void {
         std.debug.assert(next_image_result.result == .success);
 
         const image_index = next_image_result.image_index;
-        try recordCommandBuffer(device, command_buffers[current_frame], pipeline, render_pass, framebuffers[image_index], swapchain.extent);
+        try recordCommandBuffer(&ctx, command_buffers[current_frame], pipeline, render_pass, framebuffers[image_index], swapchain.extent);
 
         const frame_sync_objects = FrameSyncObjects{
             .image_available_semaphore = sync.image_available_semaphores[current_frame],
@@ -225,9 +179,7 @@ pub fn main() !void {
             .in_flight_fence = sync.in_flight_fences[current_frame],
         };
         if (!try drawFrame(
-            device,
-            graphics_queue,
-            present_queue,
+            &ctx,
             command_buffers[current_frame],
             frame_sync_objects,
             swapchain.handle,
@@ -243,9 +195,7 @@ pub fn main() !void {
 }
 
 fn drawFrame(
-    device: Device,
-    graphics_queue: Queue,
-    present_queue: Queue,
+    ctx: *const GraphicsContext,
     command_buffer: vk.CommandBuffer,
     sync: FrameSyncObjects,
     swapchain: vk.SwapchainKHR,
@@ -266,10 +216,10 @@ fn drawFrame(
     };
 
     const fences = [_]vk.Fence{sync.in_flight_fence};
-    try device.resetFences(fences.len, &fences);
+    try ctx.device.resetFences(fences.len, &fences);
 
     const submits = [_]vk.SubmitInfo{submit_info};
-    try graphics_queue.submit(submits.len, &submits, sync.in_flight_fence);
+    try ctx.graphics_queue.submit(submits.len, &submits, sync.in_flight_fence);
 
     const indices = [_]u32{image_index};
     const swapchains = [_]vk.SwapchainKHR{swapchain};
@@ -281,7 +231,7 @@ fn drawFrame(
         .p_image_indices = &indices,
     };
 
-    const present_result = present_queue.presentKHR(&present_info) catch |err| {
+    const present_result = ctx.present_queue.presentKHR(&present_info) catch |err| {
         if (err == error.OutOfDateKHR) {
             return false;
         }
@@ -297,10 +247,7 @@ fn drawFrame(
 
 fn recreateSwapchain(
     allocator: std.mem.Allocator,
-    device: Device,
-    physical_device: vk.PhysicalDevice,
-    graphics_queue_index: u32,
-    present_queue_index: u32,
+    ctx: *const GraphicsContext,
     window: *Window,
     old_swapchain: *vkk.Swapchain,
     images: *[]vk.Image,
@@ -314,32 +261,32 @@ fn recreateSwapchain(
         c.glfwWaitEvents();
     }
 
-    try device.deviceWaitIdle();
+    try ctx.device.deviceWaitIdle();
 
     const swapchain = try vkk.Swapchain.create(
-        device.handle,
-        physical_device,
+        ctx.device.handle,
+        ctx.physical_device.handle,
         old_swapchain.surface,
         .{
-            .graphics_queue_index = graphics_queue_index,
-            .present_queue_index = present_queue_index,
+            .graphics_queue_index = ctx.graphics_queue_index,
+            .present_queue_index = ctx.present_queue_index,
             .desired_extent = .{ .width = extent.width, .height = extent.height },
             .old_swapchain = old_swapchain.handle,
         },
     );
 
     for (image_views.*) |view| {
-        device.destroyImageView(view, null);
+        ctx.device.destroyImageView(view, null);
     }
     old_swapchain.destroy();
 
-    destroyFramebuffers(allocator, device, framebuffers.*);
+    destroyFramebuffers(allocator, ctx.device, framebuffers.*);
 
     try swapchain.getImages(images.*);
     try swapchain.getImageViews(images.*, image_views.*);
     framebuffers.* = try createFramebuffers(
         allocator,
-        device,
+        ctx.device,
         extent,
         swapchain.image_count,
         image_views.*,
@@ -369,7 +316,7 @@ fn destroySyncObjects(device: Device, sync: SyncObjects) void {
 }
 
 fn recordCommandBuffer(
-    device: Device,
+    ctx: *const GraphicsContext,
     command_buffer: vk.CommandBuffer,
     pipeline: vk.Pipeline,
     render_pass: vk.RenderPass,
@@ -377,8 +324,8 @@ fn recordCommandBuffer(
     extent: vk.Extent2D,
 ) !void {
     const begin_info = vk.CommandBufferBeginInfo{};
-    try device.beginCommandBuffer(command_buffer, &begin_info);
-    const cmd = dispatch.initCommandBuffer(command_buffer);
+    try ctx.device.beginCommandBuffer(command_buffer, &begin_info);
+    const cmd = CommandBuffer.init(command_buffer, ctx.vkd);
 
     const clear_values = [_]vk.ClearValue{
         .{ .color = .{ .float_32 = .{ 0.1, 0.1, 0.1, 1 } } },
@@ -417,7 +364,7 @@ fn recordCommandBuffer(
     cmd.draw(3, 1, 0, 0);
 
     cmd.endRenderPass();
-    try device.endCommandBuffer(command_buffer);
+    try ctx.device.endCommandBuffer(command_buffer);
 }
 
 fn createCommandBuffers(
