@@ -67,9 +67,11 @@ pub fn main() !void {
     const window = try Window.init(allocator, window_width, window_height, "vk-kickstart");
     defer window.deinit(allocator);
 
-    const instance_handle = try vkk.instance.create(c.glfwGetInstanceProcAddress, .{
-        .required_api_version = vk.API_VERSION_1_3,
-    }, .{}, null);
+    const instance_handle = try vkk.instance.create(
+        c.glfwGetInstanceProcAddress,
+        .{ .required_api_version = vk.API_VERSION_1_3 },
+        null,
+    );
     const instance = try dispatch.initInstance(instance_handle, c.glfwGetInstanceProcAddress);
     defer instance.destroyInstance(null);
 
@@ -119,9 +121,9 @@ pub fn main() !void {
         device.handle,
         physical_device.handle,
         surface,
-        graphics_queue_index,
-        present_queue_index,
         .{
+            .graphics_queue_index = graphics_queue_index,
+            .present_queue_index = present_queue_index,
             .desired_extent = .{ .width = window_width, .height = window_height },
         },
     );
@@ -318,9 +320,9 @@ fn recreateSwapchain(
         device.handle,
         physical_device,
         old_swapchain.surface,
-        graphics_queue_index,
-        present_queue_index,
         .{
+            .graphics_queue_index = graphics_queue_index,
+            .present_queue_index = present_queue_index,
             .desired_extent = .{ .width = extent.width, .height = extent.height },
             .old_swapchain = old_swapchain.handle,
         },

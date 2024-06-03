@@ -59,7 +59,6 @@ const PhysicalDeviceExtensionsArray = std.BoundedArray(vk.ExtensionProperties, m
 const PhysicalDeviceQueueFamiliesArray = std.BoundedArray(vk.QueueFamilyProperties, max_queue_families);
 
 handle: vk.PhysicalDevice,
-surface: vk.SurfaceKHR,
 properties: vk.PhysicalDeviceProperties,
 memory_properties: vk.PhysicalDeviceMemoryProperties,
 features: vk.PhysicalDeviceFeatures,
@@ -230,7 +229,6 @@ pub fn select(
 
     return .{
         .handle = selected.handle,
-        .surface = options.surface,
         .features = options.required_features,
         .features_11 = options.required_features_11,
         .features_12 = if (options.required_features_12) |features| features else .{},
@@ -272,20 +270,6 @@ pub fn getExtensions(
         buffer[i] = @ptrCast(&self.extensions.buffer[i]);
     }
     return buffer[0..self.extensions.len];
-}
-
-/// Returns an array of the extensions required to be enabled when creating the logical device.
-///
-/// Caller owns the memory.
-pub fn getExtensionsAlloc(
-    self: *const PhysicalDevice,
-    allocator: std.mem.Allocator,
-) error{OutOfMemory}![][*:0]const u8 {
-    const slice = try allocator.alloc([*:0]const u8, self.extensions.len);
-    for (slice, 0..) |*ptr, i| {
-        ptr.* = @ptrCast(&self.extensions.buffer[i]);
-    }
-    return slice;
 }
 
 fn printAvailableFeatures(comptime T: type, features: T) void {

@@ -44,6 +44,10 @@ present_mode: vk.PresentModeKHR,
 allocation_callbacks: ?*const vk.AllocationCallbacks,
 
 pub const CreateOptions = struct {
+    /// Graphics queue index
+    graphics_queue_index: u32,
+    /// Present queue index
+    present_queue_index: u32,
     /// Desired size (in pixels) of the swapchain image(s).
     /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
@@ -100,11 +104,10 @@ pub fn create(
     device: vk.Device,
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
-    graphics_queue_index: u32,
-    present_queue_index: u32,
     options: CreateOptions,
 ) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
+    std.debug.assert(physical_device != .null_handle);
     std.debug.assert(device != .null_handle);
 
     const surface_support = try getSurfaceSupportDetails(physical_device, surface);
@@ -126,8 +129,8 @@ pub fn create(
             return error.UsageFlagsNotSupported;
     }
 
-    const same_index = graphics_queue_index == present_queue_index;
-    const queue_family_indices = [_]u32{ graphics_queue_index, present_queue_index };
+    const same_index = options.graphics_queue_index == options.present_queue_index;
+    const queue_family_indices = [_]u32{ options.graphics_queue_index, options.present_queue_index };
 
     const swapchain_info = vk.SwapchainCreateInfoKHR{
         .p_next = options.p_next_chain,

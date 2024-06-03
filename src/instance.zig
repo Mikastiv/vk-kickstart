@@ -8,21 +8,6 @@ const root = @import("root");
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
 
-const api: []const vk.ApiInfo = &.{
-    .{
-        .base_commands = .{
-            .createInstance = true,
-            .getInstanceProcAddr = true,
-            .enumerateInstanceVersion = true,
-            .enumerateInstanceLayerProperties = true,
-            .enumerateInstanceExtensionProperties = true,
-        },
-        .instance_commands = .{
-            .destroyInstance = true,
-        },
-    },
-};
-
 const BaseDispatch = dispatch.BaseDispatch;
 const InstanceDispatch = dispatch.InstanceDispatch;
 
@@ -83,17 +68,19 @@ pub const CreateOptions = struct {
     required_layers: []const [*:0]const u8 = &.{},
     /// pNext chain.
     p_next_chain: ?*anyopaque = null,
+    /// Debug messenger options
+    debug: DebugMessengerOptions = .{},
 };
 
 pub const DebugMessengerOptions = struct {
     /// Custom debug callback function (or use default).
-    debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
+    callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
     /// Debug message severity filter.
-    debug_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = default_message_severity,
+    message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = default_message_severity,
     /// Debug message type filter.
-    debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
+    message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
     /// Debug user data pointer.
-    debug_user_data: ?*anyopaque = null,
+    user_data: ?*anyopaque = null,
 };
 
 const Error = error{
@@ -119,7 +106,6 @@ pub const CreateError = Error ||
 pub fn create(
     loader: anytype,
     options: CreateOptions,
-    debug_options: DebugMessengerOptions,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!vk.Instance {
     dispatch.vkb_table = try BaseDispatch.load(loader);
@@ -142,10 +128,10 @@ pub fn create(
 
     const p_next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
         .p_next = options.p_next_chain,
-        .message_severity = debug_options.debug_message_severity,
-        .message_type = debug_options.debug_message_type,
-        .pfn_user_callback = debug_options.debug_callback,
-        .p_user_data = debug_options.debug_user_data,
+        .message_severity = options.debug.message_severity,
+        .message_type = options.debug.message_type,
+        .pfn_user_callback = options.debug.callback,
+        .p_user_data = options.debug.user_data,
     } else options.p_next_chain;
 
     const portability_enumeration_support = isExtensionAvailable(
@@ -204,6 +190,36 @@ pub fn create(
     return instance;
 }
 
+pub fn createDebugMessenger(
+    instance: vk.Instance,
+    options: DebugMessengerOptions,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
+) !?vk.DebugUtilsMessengerEXT {
+    if (!build_options.enable_validation) return null;
+
+    std.debug.assert(instance != .null_handle);
+
+    const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
+        .message_severity = options.message_severity,
+        .message_type = options.message_type,
+        .pfn_user_callback = options.callback,
+        .p_user_data = options.user_data,
+    };
+
+    return try vki().createDebugUtilsMessengerEXT(instance, &debug_info, allocation_callbacks);
+}
+
+pub fn destroyDebugMessenger(
+    instance: vk.Instance,
+    debug_messenger: ?vk.DebugUtilsMessengerEXT,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
+) void {
+    if (!build_options.enable_validation) return;
+
+    std.debug.assert(debug_messenger != null);
+    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
+}
+
 fn defaultDebugMessageCallback(
     severity: vk.DebugUtilsMessageSeverityFlagsEXT,
     _: vk.DebugUtilsMessageTypeFlagsEXT,
@@ -224,34 +240,6 @@ fn defaultDebugMessageCallback(
         }
     }
     return vk.FALSE;
-}
-
-pub fn createDebugMessenger(
-    instance: vk.Instance,
-    options: DebugMessengerOptions,
-    allocation_callbacks: ?*const vk.AllocationCallbacks,
-) !?vk.DebugUtilsMessengerEXT {
-    if (!build_options.enable_validation) return null;
-
-    const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
-        .message_severity = options.debug_message_severity,
-        .message_type = options.debug_message_type,
-        .pfn_user_callback = options.debug_callback,
-        .p_user_data = options.debug_user_data,
-    };
-
-    return try vki().createDebugUtilsMessengerEXT(instance, &debug_info, allocation_callbacks);
-}
-
-pub fn destroyDebugMessenger(
-    instance: vk.Instance,
-    debug_messenger: ?vk.DebugUtilsMessengerEXT,
-    allocation_callbacks: ?*const vk.AllocationCallbacks,
-) void {
-    if (!build_options.enable_validation) return;
-
-    std.debug.assert(debug_messenger != null);
-    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
 }
 
 fn isExtensionAvailable(
