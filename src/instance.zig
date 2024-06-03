@@ -1,9 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const vk = @import("vulkan-zig");
+const vk = @import("vulkan");
 const build_options = @import("build_options");
 const dispatch = @import("dispatch.zig");
-const Instance = @This();
 const root = @import("root");
 
 const log = @import("log.zig").vk_kickstart_log;
@@ -24,11 +23,11 @@ const api: []const vk.ApiInfo = &.{
     },
 };
 
-const BaseDispatch = vk.BaseWrapper(api);
-const InstanceDispatch = vk.InstanceWrapper(api);
+const BaseDispatch = dispatch.BaseDispatch;
+const InstanceDispatch = dispatch.InstanceDispatch;
 
-var vkb: ?BaseDispatch = null;
-var vki: ?InstanceDispatch = null;
+const vkb = dispatch.vkb;
+const vki = dispatch.vki;
 
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
@@ -56,11 +55,6 @@ const AvailableLayersArray = std.BoundedArray(vk.LayerProperties, max_layers);
 const RequiredExtensionsArray = std.BoundedArray([*:0]const u8, max_extensions);
 const RequiredLayersArray = std.BoundedArray([*:0]const u8, max_layers);
 
-handle: vk.Instance,
-allocation_callbacks: ?*const vk.AllocationCallbacks,
-debug_messenger: ?vk.DebugUtilsMessengerEXT,
-api_version: u32,
-
 const default_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = .{
     .warning_bit_ext = true,
     .error_bit_ext = true,
@@ -87,8 +81,11 @@ pub const CreateOptions = struct {
     required_extensions: []const [*:0]const u8 = &.{},
     /// Array of required layers to enable.
     required_layers: []const [*:0]const u8 = &.{},
-    /// Vulkan allocation callbacks.
-    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
+    /// pNext chain.
+    p_next_chain: ?*anyopaque = null,
+};
+
+pub const DebugMessengerOptions = struct {
     /// Custom debug callback function (or use default).
     debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
     /// Debug message severity filter.
@@ -97,8 +94,6 @@ pub const CreateOptions = struct {
     debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
     /// Debug user data pointer.
     debug_user_data: ?*anyopaque = null,
-    /// pNext chain.
-    p_next_chain: ?*anyopaque = null,
 };
 
 const Error = error{
@@ -124,8 +119,10 @@ pub const CreateError = Error ||
 pub fn create(
     loader: anytype,
     options: CreateOptions,
-) CreateError!Instance {
-    vkb = try BaseDispatch.load(loader);
+    debug_options: DebugMessengerOptions,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
+) CreateError!vk.Instance {
+    dispatch.vkb_table = try BaseDispatch.load(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
     if (api_version < vk.API_VERSION_1_1) return error.UnsupportedInstanceVersion;
@@ -145,10 +142,10 @@ pub fn create(
 
     const p_next = if (build_options.enable_validation) &vk.DebugUtilsMessengerCreateInfoEXT{
         .p_next = options.p_next_chain,
-        .message_severity = options.debug_message_severity,
-        .message_type = options.debug_message_type,
-        .pfn_user_callback = options.debug_callback,
-        .p_user_data = options.debug_user_data,
+        .message_severity = debug_options.debug_message_severity,
+        .message_type = debug_options.debug_message_type,
+        .pfn_user_callback = debug_options.debug_callback,
+        .p_user_data = debug_options.debug_user_data,
     } else options.p_next_chain;
 
     const portability_enumeration_support = isExtensionAvailable(
@@ -166,12 +163,9 @@ pub fn create(
         .p_next = p_next,
     };
 
-    const instance = try vkb.?.createInstance(&instance_info, options.allocation_callbacks);
-    vki = try InstanceDispatch.load(instance, vkb.?.dispatch.vkGetInstanceProcAddr);
-    errdefer vki.?.destroyInstance(instance, options.allocation_callbacks);
-
-    const debug_messenger = try createDebugMessenger(instance, options);
-    errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
+    const instance = try vkb().createInstance(&instance_info, allocation_callbacks);
+    dispatch.vki_table = try InstanceDispatch.load(instance, vkb().dispatch.vkGetInstanceProcAddr);
+    errdefer vki().destroyInstance(instance, options.allocation_callbacks);
 
     if (build_options.verbose) {
         log.debug("----- instance creation -----", .{});
@@ -207,17 +201,7 @@ pub fn create(
         }
     }
 
-    return .{
-        .handle = instance,
-        .allocation_callbacks = options.allocation_callbacks,
-        .debug_messenger = debug_messenger,
-        .api_version = api_version,
-    };
-}
-
-pub fn destroy(self: *const Instance) void {
-    destroyDebugMessenger(self.handle, self.debug_messenger, self.allocation_callbacks);
-    vki.?.destroyInstance(self.handle, self.allocation_callbacks);
+    return instance;
 }
 
 fn defaultDebugMessageCallback(
@@ -242,7 +226,11 @@ fn defaultDebugMessageCallback(
     return vk.FALSE;
 }
 
-fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !?vk.DebugUtilsMessengerEXT {
+pub fn createDebugMessenger(
+    instance: vk.Instance,
+    options: DebugMessengerOptions,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
+) !?vk.DebugUtilsMessengerEXT {
     if (!build_options.enable_validation) return null;
 
     const debug_info = vk.DebugUtilsMessengerCreateInfoEXT{
@@ -252,10 +240,10 @@ fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !?vk.Debu
         .p_user_data = options.debug_user_data,
     };
 
-    return try vki.?.createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
+    return try vki().createDebugUtilsMessengerEXT(instance, &debug_info, allocation_callbacks);
 }
 
-fn destroyDebugMessenger(
+pub fn destroyDebugMessenger(
     instance: vk.Instance,
     debug_messenger: ?vk.DebugUtilsMessengerEXT,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
@@ -263,7 +251,7 @@ fn destroyDebugMessenger(
     if (!build_options.enable_validation) return;
 
     std.debug.assert(debug_messenger != null);
-    vki.?.destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
+    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
 }
 
 fn isExtensionAvailable(
@@ -388,13 +376,13 @@ fn getRequiredLayers(
 
 fn getAvailableExtensions() !AvailableExtensionsArray {
     var extension_count: u32 = 0;
-    var result = try vkb.?.enumerateInstanceExtensionProperties(null, &extension_count, null);
+    var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
     if (result != .success) return error.EnumerateExtensionsFailed;
 
     var extensions = try AvailableExtensionsArray.init(extension_count);
 
     while (true) {
-        result = try vkb.?.enumerateInstanceExtensionProperties(null, &extension_count, &extensions.buffer);
+        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, &extensions.buffer);
         if (result == .success) break;
     }
 
@@ -403,13 +391,13 @@ fn getAvailableExtensions() !AvailableExtensionsArray {
 
 fn getAvailableLayers() !AvailableLayersArray {
     var layer_count: u32 = 0;
-    var result = try vkb.?.enumerateInstanceLayerProperties(&layer_count, null);
+    var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
     if (result != .success) return error.EnumerateLayersFailed;
 
     var layers = try AvailableLayersArray.init(layer_count);
 
     while (true) {
-        result = try vkb.?.enumerateInstanceLayerProperties(&layer_count, &layers.buffer);
+        result = try vkb().enumerateInstanceLayerProperties(&layer_count, &layers.buffer);
         if (result == .success) break;
     }
 
@@ -417,7 +405,7 @@ fn getAvailableLayers() !AvailableLayersArray {
 }
 
 fn getAppropriateApiVersion(required_version: u32) !u32 {
-    const instance_version = try vkb.?.enumerateInstanceVersion();
+    const instance_version = try vkb().enumerateInstanceVersion();
 
     if (instance_version < required_version)
         return error.RequiredVersionNotAvailable;

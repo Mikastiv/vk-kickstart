@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     const kickstart = b.addModule("vk-kickstart", .{
         .root_source_file = b.path("src/vk_kickstart.zig"),
         .imports = &.{
-            .{ .name = "vulkan-zig", .module = vkzig_dep.module("vulkan-zig") },
+            .{ .name = "vulkan", .module = vkzig_dep.module("vulkan-zig") },
         },
     });
     kickstart.addOptions("build_options", build_options);

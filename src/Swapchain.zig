@@ -1,6 +1,6 @@
 const std = @import("std");
 const build_options = @import("build_options");
-const vk = @import("vulkan-zig");
+const vk = @import("vulkan");
 const Device = @import("Device.zig");
 const dispatch = @import("dispatch.zig");
 const Swapchain = @This();
@@ -97,14 +97,17 @@ pub const CreateError = Error ||
     DeviceDispatch.CreateSwapchainKHRError;
 
 pub fn create(
-    device: *const Device,
+    device: vk.Device,
+    physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
+    graphics_queue_index: u32,
+    present_queue_index: u32,
     options: CreateOptions,
 ) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
-    std.debug.assert(device.handle != .null_handle);
+    std.debug.assert(device != .null_handle);
 
-    const surface_support = try getSurfaceSupportDetails(device.physical_device, surface);
+    const surface_support = try getSurfaceSupportDetails(physical_device, surface);
 
     const min_image_count = selectMinImageCount(&surface_support.capabilities, options.desired_min_image_count);
     const format = pickSurfaceFormat(surface_support.formats.constSlice(), options.desired_formats);
@@ -123,8 +126,6 @@ pub fn create(
             return error.UsageFlagsNotSupported;
     }
 
-    const graphics_queue_index = device.graphics_queue_index;
-    const present_queue_index = device.present_queue_index;
     const same_index = graphics_queue_index == present_queue_index;
     const queue_family_indices = [_]u32{ graphics_queue_index, present_queue_index };
 
@@ -148,11 +149,11 @@ pub fn create(
         .old_swapchain = if (options.old_swapchain) |old| old else .null_handle,
     };
 
-    const swapchain = try vkd().createSwapchainKHR(device.handle, &swapchain_info, options.allocation_callbacks);
-    errdefer vkd().destroySwapchainKHR(device.handle, swapchain, options.allocation_callbacks);
+    const swapchain = try vkd().createSwapchainKHR(device, &swapchain_info, options.allocation_callbacks);
+    errdefer vkd().destroySwapchainKHR(device, swapchain, options.allocation_callbacks);
 
     var image_count: u32 = undefined;
-    const result = try vkd().getSwapchainImagesKHR(device.handle, swapchain, &image_count, null);
+    const result = try vkd().getSwapchainImagesKHR(device, swapchain, &image_count, null);
     if (result != .success) return error.GetSwapchainImageCountFailed;
 
     if (build_options.verbose) {
@@ -165,7 +166,7 @@ pub fn create(
     }
 
     return .{
-        .device = device.handle,
+        .device = device,
         .handle = swapchain,
         .surface = surface,
         .min_image_count = min_image_count,

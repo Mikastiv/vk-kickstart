@@ -1,6 +1,6 @@
 const std = @import("std");
 const build_options = @import("build_options");
-const vk = @import("vulkan-zig");
+const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
 const Instance = @import("Instance.zig");
 const root = @import("root");
@@ -8,6 +8,7 @@ const PhysicalDevice = @This();
 
 const log = @import("log.zig").vk_kickstart_log;
 
+const vkb = dispatch.vkb;
 const vki = dispatch.vki;
 
 const InstanceDispatch = dispatch.InstanceDispatch;
@@ -127,23 +128,19 @@ pub const SelectError = Error ||
     InstanceDispatch.GetPhysicalDeviceSurfaceFormatsKHRError;
 
 pub fn select(
-    instance: *const Instance,
+    instance: vk.Instance,
     options: SelectOptions,
 ) SelectError!PhysicalDevice {
-    std.debug.assert(instance.handle != .null_handle);
+    std.debug.assert(instance != .null_handle);
     std.debug.assert(options.required_api_version >= vk.API_VERSION_1_1);
     std.debug.assert(options.surface != .null_handle);
 
-    if (options.required_features_12 != null and instance.api_version < vk.API_VERSION_1_2)
-        return error.Features12UnsupportedByInstance;
-    if (options.required_features_13 != null and instance.api_version < vk.API_VERSION_1_3)
-        return error.Features13UnsupportedByInstance;
+    const physical_device_handles = try getPhysicalDevices(instance);
 
-    const physical_device_handles = try getPhysicalDevices(instance.handle);
-
+    const instance_version = try vkb().enumerateInstanceVersion();
     var physical_device_infos = try PhysicalDeviceInfosArray.init(0);
     for (physical_device_handles.constSlice()) |handle| {
-        const physical_device_info = try getPhysicalDeviceInfo(handle, options.surface, instance.api_version);
+        const physical_device_info = try getPhysicalDeviceInfo(handle, options.surface, instance_version);
         try physical_device_infos.append(physical_device_info);
     }
 
@@ -221,10 +218,10 @@ pub fn select(
     }
 
     if (selected.portability_ext_available) {
-        try setExtension(&extensions, vk.extension_info.khr_portability_subset.name);
+        try setExtension(&extensions, vk.extensions.khr_portability_subset.name);
     }
 
-    try setExtension(&extensions, vk.extension_info.khr_swapchain.name);
+    try setExtension(&extensions, vk.extensions.khr_swapchain.name);
 
     if (build_options.verbose) {
         const device_name: [*:0]const u8 = @ptrCast(&selected.properties.device_name);
@@ -450,7 +447,7 @@ fn isDeviceSuitable(
     }
 
     if (device.graphics_queue_index == null or device.present_queue_index == null) return false;
-    if (!isExtensionAvailable(device.available_extensions.constSlice(), vk.extension_info.khr_swapchain.name)) {
+    if (!isExtensionAvailable(device.available_extensions.constSlice(), vk.extensions.khr_swapchain.name)) {
         return false;
     }
     if (!try isCompatibleWithSurface(device.handle, surface)) {
@@ -712,7 +709,7 @@ fn getPhysicalDeviceInfo(
     );
     const present_queue_index = try getPresentQueue(handle, queue_families.constSlice(), surface);
 
-    const portability_ext_available = isExtensionAvailable(available_extensions.constSlice(), vk.extension_info.khr_portability_subset.name);
+    const portability_ext_available = isExtensionAvailable(available_extensions.constSlice(), vk.extensions.khr_portability_subset.name);
 
     return .{
         .handle = handle,

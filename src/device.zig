@@ -1,9 +1,8 @@
 const std = @import("std");
 const build_options = @import("build_options");
-const vk = @import("vulkan-zig");
+const vk = @import("vulkan");
 const dispatch = @import("dispatch.zig");
 const PhysicalDevice = @import("PhysicalDevice.zig");
-const Device = @This();
 
 const log = @import("log.zig").vk_kickstart_log;
 
@@ -11,19 +10,7 @@ const vki = dispatch.vki;
 const vkd = dispatch.vkd;
 
 const InstanceDispatch = dispatch.InstanceDispatch;
-
-handle: vk.Device,
-physical_device: vk.PhysicalDevice,
-surface: vk.SurfaceKHR,
-allocation_callbacks: ?*const vk.AllocationCallbacks,
-graphics_queue: vk.Queue,
-present_queue: vk.Queue,
-transfer_queue: ?vk.Queue,
-compute_queue: ?vk.Queue,
-graphics_queue_index: u32,
-present_queue_index: u32,
-transfer_queue_index: ?u32,
-compute_queue_index: ?u32,
+const DeviceDispatch = dispatch.DeviceDispatch;
 
 const Error = error{
     OutOfMemory,
@@ -37,7 +24,7 @@ pub fn create(
     physical_device: *const PhysicalDevice,
     p_next_chain: ?*anyopaque,
     allocation_callbacks: ?*const vk.AllocationCallbacks,
-) CreateError!Device {
+) CreateError!vk.Device {
     std.debug.assert(physical_device.handle != .null_handle);
 
     const fixed_buffer_size =
@@ -77,7 +64,7 @@ pub fn create(
     };
 
     const handle = try vki().createDevice(physical_device.handle, &device_info, allocation_callbacks);
-    try dispatch.initDeviceDispatch(handle);
+    dispatch.vkd_table = try DeviceDispatch.load(handle, dispatch.vki_table.?.dispatch.vkGetDeviceProcAddr);
     errdefer vkd().destroyDevice(handle, allocation_callbacks);
 
     if (build_options.verbose) {
@@ -111,29 +98,7 @@ pub fn create(
         }
     }
 
-    const graphics_queue = vkd().getDeviceQueue(handle, physical_device.graphics_queue_index, 0);
-    const present_queue = vkd().getDeviceQueue(handle, physical_device.present_queue_index, 0);
-    const transfer_queue = if (physical_device.transfer_queue_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
-    const compute_queue = if (physical_device.compute_queue_index) |family| vkd().getDeviceQueue(handle, family, 0) else null;
-
-    return .{
-        .handle = handle,
-        .physical_device = physical_device.handle,
-        .surface = physical_device.surface,
-        .allocation_callbacks = allocation_callbacks,
-        .graphics_queue = graphics_queue,
-        .present_queue = present_queue,
-        .transfer_queue = transfer_queue,
-        .compute_queue = compute_queue,
-        .graphics_queue_index = physical_device.graphics_queue_index,
-        .present_queue_index = physical_device.present_queue_index,
-        .transfer_queue_index = physical_device.transfer_queue_index,
-        .compute_queue_index = physical_device.compute_queue_index,
-    };
-}
-
-pub fn destroy(self: *const Device) void {
-    vkd().destroyDevice(self.handle, self.allocation_callbacks);
+    return handle;
 }
 
 fn printEnabledFeatures(comptime T: type, features: T) void {

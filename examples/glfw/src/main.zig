@@ -1,15 +1,12 @@
 const std = @import("std");
 const c = @import("c.zig");
-const vk = @import("vulkan-zig");
+const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
 const dispatch = @import("dispatch.zig");
 const Window = @import("Window.zig");
 const Shaders = @import("shaders");
-
-// Vulkan dispatchers
-const vkb = vkk.dispatch.vkb; // Base dispatch
-const vki = vkk.dispatch.vki; // Instance dispatch
-const vkd = vkk.dispatch.vkd; // Device dispatch
+const Device = dispatch.Device;
+const Queue = dispatch.Queue;
 
 pub const vkk_options = struct {
     // Constants below remove the need for an allocator. They all have default
@@ -70,24 +67,28 @@ pub fn main() !void {
     const window = try Window.init(allocator, window_width, window_height, "vk-kickstart");
     defer window.deinit(allocator);
 
-    const instance = try vkk.Instance.create(c.glfwGetInstanceProcAddress, .{
+    const instance_handle = try vkk.instance.create(c.glfwGetInstanceProcAddress, .{
         .required_api_version = vk.API_VERSION_1_3,
-    });
-    defer instance.destroy();
+    }, .{}, null);
+    const instance = try dispatch.initInstance(instance_handle, c.glfwGetInstanceProcAddress);
+    defer instance.destroyInstance(null);
+
+    const debug_messenger = try vkk.instance.createDebugMessenger(instance.handle, .{}, null);
+    defer vkk.instance.destroyDebugMessenger(instance.handle, debug_messenger, null);
 
     const surface = try window.createSurface(instance.handle);
-    defer vki().destroySurfaceKHR(instance.handle, surface, instance.allocation_callbacks);
+    defer instance.destroySurfaceKHR(surface, null);
 
-    const physical_device = try vkk.PhysicalDevice.select(&instance, .{
+    const physical_device = try vkk.PhysicalDevice.select(instance.handle, .{
         .surface = surface,
         .transfer_queue = .dedicated,
         .required_api_version = vk.API_VERSION_1_2,
         .required_extensions = &.{
-            vk.extension_info.khr_ray_tracing_pipeline.name,
-            vk.extension_info.khr_acceleration_structure.name,
-            vk.extension_info.khr_deferred_host_operations.name,
-            vk.extension_info.khr_buffer_device_address.name,
-            vk.extension_info.ext_descriptor_indexing.name,
+            vk.extensions.khr_ray_tracing_pipeline.name,
+            vk.extensions.khr_acceleration_structure.name,
+            vk.extensions.khr_deferred_host_operations.name,
+            vk.extensions.khr_buffer_device_address.name,
+            vk.extensions.ext_descriptor_indexing.name,
         },
         .required_features = .{
             .sampler_anisotropy = vk.TRUE,
@@ -103,12 +104,27 @@ pub fn main() !void {
         .ray_tracing_pipeline = vk.TRUE,
     };
 
-    const device = try vkk.Device.create(&physical_device, @ptrCast(&rt_features), null);
-    defer device.destroy();
+    const device_handle = try vkk.device.create(&physical_device, @ptrCast(&rt_features), null);
+    const device = try dispatch.initDevice(device_handle);
+    defer device.destroyDevice(null);
 
-    var swapchain = try vkk.Swapchain.create(&device, surface, .{
-        .desired_extent = .{ .width = window_width, .height = window_height },
-    });
+    const graphics_queue_index = physical_device.graphics_queue_index;
+    const present_queue_index = physical_device.present_queue_index;
+    const graphics_queue_handle = device.getDeviceQueue(graphics_queue_index, 0);
+    const present_queue_handle = device.getDeviceQueue(present_queue_index, 0);
+    const graphics_queue = dispatch.initQueue(graphics_queue_handle);
+    const present_queue = dispatch.initQueue(present_queue_handle);
+
+    var swapchain = try vkk.Swapchain.create(
+        device.handle,
+        physical_device.handle,
+        surface,
+        graphics_queue_index,
+        present_queue_index,
+        .{
+            .desired_extent = .{ .width = window_width, .height = window_height },
+        },
+    );
     defer swapchain.destroy();
 
     var images = try allocator.alloc(vk.Image, swapchain.image_count);
@@ -122,35 +138,35 @@ pub fn main() !void {
     try swapchain.getImageViews(images, image_views);
     defer {
         for (image_views) |view| {
-            vkd().destroyImageView(device.handle, view, null);
+            device.destroyImageView(view, null);
         }
     }
 
-    const render_pass = try createRenderPass(device.handle, swapchain.image_format);
-    defer vkd().destroyRenderPass(device.handle, render_pass, null);
+    const render_pass = try createRenderPass(device, swapchain.image_format);
+    defer device.destroyRenderPass(render_pass, null);
 
-    var framebuffers = try createFramebuffers(allocator, device.handle, swapchain.extent, swapchain.image_count, image_views, render_pass);
-    defer destroyFramebuffers(allocator, device.handle, framebuffers);
+    var framebuffers = try createFramebuffers(allocator, device, swapchain.extent, swapchain.image_count, image_views, render_pass);
+    defer destroyFramebuffers(allocator, device, framebuffers);
 
-    const sync = try createSyncObjects(device.handle);
-    defer destroySyncObjects(device.handle, sync);
+    const sync = try createSyncObjects(device);
+    defer destroySyncObjects(device, sync);
 
-    const vertex_shader = try createShaderModule(device.handle, &Shaders.shader_vert);
-    defer vkd().destroyShaderModule(device.handle, vertex_shader, null);
-    const fragment_shader = try createShaderModule(device.handle, &Shaders.shader_frag);
-    defer vkd().destroyShaderModule(device.handle, fragment_shader, null);
+    const vertex_shader = try createShaderModule(device, &Shaders.shader_vert);
+    defer device.destroyShaderModule(vertex_shader, null);
+    const fragment_shader = try createShaderModule(device, &Shaders.shader_frag);
+    defer device.destroyShaderModule(fragment_shader, null);
 
     const pipeline_layout_info = vk.PipelineLayoutCreateInfo{};
-    const pipeline_layout = try vkd().createPipelineLayout(device.handle, &pipeline_layout_info, null);
-    defer vkd().destroyPipelineLayout(device.handle, pipeline_layout, null);
+    const pipeline_layout = try device.createPipelineLayout(&pipeline_layout_info, null);
+    defer device.destroyPipelineLayout(pipeline_layout, null);
 
-    const pipeline = try createGraphicsPipeline(device.handle, render_pass, vertex_shader, fragment_shader, pipeline_layout);
-    defer vkd().destroyPipeline(device.handle, pipeline, null);
+    const pipeline = try createGraphicsPipeline(device, render_pass, vertex_shader, fragment_shader, pipeline_layout);
+    defer device.destroyPipeline(pipeline, null);
 
-    const command_pool = try createCommandPool(device.handle, device.graphics_queue_index);
-    defer vkd().destroyCommandPool(device.handle, command_pool, null);
+    const command_pool = try createCommandPool(device, graphics_queue_index);
+    defer device.destroyCommandPool(command_pool, null);
 
-    const command_buffers = try createCommandBuffers(allocator, device.handle, command_pool, max_frames_in_flight);
+    const command_buffers = try createCommandBuffers(allocator, device, command_pool, max_frames_in_flight);
     defer allocator.free(command_buffers);
 
     var current_frame: u32 = 0;
@@ -161,7 +177,10 @@ pub fn main() !void {
         if (should_recreate_swapchain) {
             swapchain = try recreateSwapchain(
                 allocator,
-                &device,
+                device,
+                physical_device.handle,
+                graphics_queue_index,
+                present_queue_index,
                 window,
                 &swapchain,
                 &images,
@@ -178,11 +197,10 @@ pub fn main() !void {
             continue;
         }
 
-        const result = try vkd().waitForFences(device.handle, 1, @ptrCast(&sync.in_flight_fences[current_frame]), vk.TRUE, std.math.maxInt(u64));
+        const result = try device.waitForFences(1, @ptrCast(&sync.in_flight_fences[current_frame]), vk.TRUE, std.math.maxInt(u64));
         std.debug.assert(result == .success);
 
-        const next_image_result = vkd().acquireNextImageKHR(
-            device.handle,
+        const next_image_result = device.acquireNextImageKHR(
             swapchain.handle,
             std.math.maxInt(u64),
             sync.image_available_semaphores[current_frame],
@@ -197,25 +215,35 @@ pub fn main() !void {
         std.debug.assert(next_image_result.result == .success);
 
         const image_index = next_image_result.image_index;
-        try recordCommandBuffer(command_buffers[current_frame], pipeline, render_pass, framebuffers[image_index], swapchain.extent);
+        try recordCommandBuffer(device, command_buffers[current_frame], pipeline, render_pass, framebuffers[image_index], swapchain.extent);
 
         const frame_sync_objects = FrameSyncObjects{
             .image_available_semaphore = sync.image_available_semaphores[current_frame],
             .render_finished_semaphore = sync.render_finished_semaphores[current_frame],
             .in_flight_fence = sync.in_flight_fences[current_frame],
         };
-        if (!try drawFrame(&device, command_buffers[current_frame], frame_sync_objects, swapchain.handle, image_index)) {
+        if (!try drawFrame(
+            device,
+            graphics_queue,
+            present_queue,
+            command_buffers[current_frame],
+            frame_sync_objects,
+            swapchain.handle,
+            image_index,
+        )) {
             should_recreate_swapchain = true;
         }
 
         current_frame = (current_frame + 1) % max_frames_in_flight;
     }
 
-    try vkd().deviceWaitIdle(device.handle);
+    try device.deviceWaitIdle();
 }
 
 fn drawFrame(
-    device: *const vkk.Device,
+    device: Device,
+    graphics_queue: Queue,
+    present_queue: Queue,
     command_buffer: vk.CommandBuffer,
     sync: FrameSyncObjects,
     swapchain: vk.SwapchainKHR,
@@ -236,10 +264,10 @@ fn drawFrame(
     };
 
     const fences = [_]vk.Fence{sync.in_flight_fence};
-    try vkd().resetFences(device.handle, fences.len, &fences);
+    try device.resetFences(fences.len, &fences);
 
     const submits = [_]vk.SubmitInfo{submit_info};
-    try vkd().queueSubmit(device.graphics_queue, submits.len, &submits, sync.in_flight_fence);
+    try graphics_queue.submit(submits.len, &submits, sync.in_flight_fence);
 
     const indices = [_]u32{image_index};
     const swapchains = [_]vk.SwapchainKHR{swapchain};
@@ -251,7 +279,7 @@ fn drawFrame(
         .p_image_indices = &indices,
     };
 
-    const present_result = vkd().queuePresentKHR(device.present_queue, &present_info) catch |err| {
+    const present_result = present_queue.presentKHR(&present_info) catch |err| {
         if (err == error.OutOfDateKHR) {
             return false;
         }
@@ -267,7 +295,10 @@ fn drawFrame(
 
 fn recreateSwapchain(
     allocator: std.mem.Allocator,
-    device: *const vkk.Device,
+    device: Device,
+    physical_device: vk.PhysicalDevice,
+    graphics_queue_index: u32,
+    present_queue_index: u32,
     window: *Window,
     old_swapchain: *vkk.Swapchain,
     images: *[]vk.Image,
@@ -281,25 +312,32 @@ fn recreateSwapchain(
         c.glfwWaitEvents();
     }
 
-    try vkd().deviceWaitIdle(device.handle);
+    try device.deviceWaitIdle();
 
-    const swapchain = try vkk.Swapchain.create(device, old_swapchain.surface, .{
-        .desired_extent = .{ .width = extent.width, .height = extent.height },
-        .old_swapchain = old_swapchain.handle,
-    });
+    const swapchain = try vkk.Swapchain.create(
+        device.handle,
+        physical_device,
+        old_swapchain.surface,
+        graphics_queue_index,
+        present_queue_index,
+        .{
+            .desired_extent = .{ .width = extent.width, .height = extent.height },
+            .old_swapchain = old_swapchain.handle,
+        },
+    );
 
     for (image_views.*) |view| {
-        vkd().destroyImageView(device.handle, view, null);
+        device.destroyImageView(view, null);
     }
     old_swapchain.destroy();
 
-    destroyFramebuffers(allocator, device.handle, framebuffers.*);
+    destroyFramebuffers(allocator, device, framebuffers.*);
 
     try swapchain.getImages(images.*);
     try swapchain.getImageViews(images.*, image_views.*);
     framebuffers.* = try createFramebuffers(
         allocator,
-        device.handle,
+        device,
         extent,
         swapchain.image_count,
         image_views.*,
@@ -309,26 +347,27 @@ fn recreateSwapchain(
     return swapchain;
 }
 
-fn destroyFramebuffers(allocator: std.mem.Allocator, device: vk.Device, framebuffers: []const vk.Framebuffer) void {
+fn destroyFramebuffers(allocator: std.mem.Allocator, device: Device, framebuffers: []const vk.Framebuffer) void {
     for (framebuffers) |framebuffer| {
-        vkd().destroyFramebuffer(device, framebuffer, null);
+        device.destroyFramebuffer(framebuffer, null);
     }
     allocator.free(framebuffers);
 }
 
-fn destroySyncObjects(device: vk.Device, sync: SyncObjects) void {
+fn destroySyncObjects(device: Device, sync: SyncObjects) void {
     for (sync.image_available_semaphores) |semaphore| {
-        vkd().destroySemaphore(device, semaphore, null);
+        device.destroySemaphore(semaphore, null);
     }
     for (sync.render_finished_semaphores) |semaphore| {
-        vkd().destroySemaphore(device, semaphore, null);
+        device.destroySemaphore(semaphore, null);
     }
     for (sync.in_flight_fences) |fence| {
-        vkd().destroyFence(device, fence, null);
+        device.destroyFence(fence, null);
     }
 }
 
 fn recordCommandBuffer(
+    device: Device,
     command_buffer: vk.CommandBuffer,
     pipeline: vk.Pipeline,
     render_pass: vk.RenderPass,
@@ -336,7 +375,8 @@ fn recordCommandBuffer(
     extent: vk.Extent2D,
 ) !void {
     const begin_info = vk.CommandBufferBeginInfo{};
-    try vkd().beginCommandBuffer(command_buffer, &begin_info);
+    try device.beginCommandBuffer(command_buffer, &begin_info);
+    const cmd = dispatch.initCommandBuffer(command_buffer);
 
     const clear_values = [_]vk.ClearValue{
         .{ .color = .{ .float_32 = .{ 0.1, 0.1, 0.1, 1 } } },
@@ -352,7 +392,7 @@ fn recordCommandBuffer(
         .p_clear_values = &clear_values,
     };
 
-    vkd().cmdBeginRenderPass(command_buffer, &render_pass_begin_info, .@"inline");
+    cmd.beginRenderPass(&render_pass_begin_info, .@"inline");
 
     const viewport = vk.Viewport{
         .x = 0,
@@ -362,25 +402,25 @@ fn recordCommandBuffer(
         .min_depth = 0,
         .max_depth = 1,
     };
-    vkd().cmdSetViewport(command_buffer, 0, 1, @ptrCast(&viewport));
+    cmd.setViewport(0, 1, @ptrCast(&viewport));
 
     const scissor = vk.Rect2D{
         .offset = .{ .x = 0, .y = 0 },
         .extent = extent,
     };
-    vkd().cmdSetScissor(command_buffer, 0, 1, @ptrCast(&scissor));
+    cmd.setScissor(0, 1, @ptrCast(&scissor));
 
-    vkd().cmdBindPipeline(command_buffer, .graphics, pipeline);
+    cmd.bindPipeline(.graphics, pipeline);
 
-    vkd().cmdDraw(command_buffer, 3, 1, 0, 0);
+    cmd.draw(3, 1, 0, 0);
 
-    vkd().cmdEndRenderPass(command_buffer);
-    try vkd().endCommandBuffer(command_buffer);
+    cmd.endRenderPass();
+    try device.endCommandBuffer(command_buffer);
 }
 
 fn createCommandBuffers(
     allocator: std.mem.Allocator,
-    device: vk.Device,
+    device: Device,
     command_pool: vk.CommandPool,
     count: u32,
 ) ![]vk.CommandBuffer {
@@ -392,21 +432,21 @@ fn createCommandBuffers(
         .level = .primary,
         .command_buffer_count = count,
     };
-    try vkd().allocateCommandBuffers(device, &command_buffer_info, command_buffers.ptr);
+    try device.allocateCommandBuffers(&command_buffer_info, command_buffers.ptr);
 
     return command_buffers;
 }
 
-fn createCommandPool(device: vk.Device, queue_family_index: u32) !vk.CommandPool {
+fn createCommandPool(device: Device, queue_family_index: u32) !vk.CommandPool {
     const create_info = vk.CommandPoolCreateInfo{
         .flags = .{ .reset_command_buffer_bit = true },
         .queue_family_index = queue_family_index,
     };
-    return vkd().createCommandPool(device, &create_info, null);
+    return device.createCommandPool(&create_info, null);
 }
 
 fn createGraphicsPipeline(
-    device: vk.Device,
+    device: Device,
     render_pass: vk.RenderPass,
     vertex_shader: vk.ShaderModule,
     fragment_shader: vk.ShaderModule,
@@ -500,55 +540,54 @@ fn createGraphicsPipeline(
     };
 
     var graphics_pipeline: vk.Pipeline = .null_handle;
-    const result = try vkd().createGraphicsPipelines(
-        device,
+    const result = try device.createGraphicsPipelines(
         .null_handle,
         1,
         @ptrCast(&pipeline_info),
         null,
         @ptrCast(&graphics_pipeline),
     );
-    errdefer vkd().destroyPipeline(device, graphics_pipeline, null);
+    errdefer device.destroyPipeline(graphics_pipeline, null);
 
     if (result != .success) return error.PipelineCreationFailed;
 
     return graphics_pipeline;
 }
 
-fn createShaderModule(device: vk.Device, bytecode: []align(4) const u8) !vk.ShaderModule {
+fn createShaderModule(device: Device, bytecode: []align(4) const u8) !vk.ShaderModule {
     const create_info = vk.ShaderModuleCreateInfo{
         .code_size = bytecode.len,
         .p_code = std.mem.bytesAsSlice(u32, bytecode).ptr,
     };
 
-    return vkd().createShaderModule(device, &create_info, null);
+    return device.createShaderModule(&create_info, null);
 }
 
-fn createSyncObjects(device: vk.Device) !SyncObjects {
+fn createSyncObjects(device: Device) !SyncObjects {
     var image_available_semaphores = [_]vk.Semaphore{.null_handle} ** max_frames_in_flight;
     var render_finished_semaphores = [_]vk.Semaphore{.null_handle} ** max_frames_in_flight;
     var in_flight_fences = [_]vk.Fence{.null_handle} ** max_frames_in_flight;
     errdefer {
         for (image_available_semaphores) |semaphore| {
             if (semaphore == .null_handle) continue;
-            vkd().destroySemaphore(device, semaphore, null);
+            device.destroySemaphore(semaphore, null);
         }
         for (render_finished_semaphores) |semaphore| {
             if (semaphore == .null_handle) continue;
-            vkd().destroySemaphore(device, semaphore, null);
+            device.destroySemaphore(semaphore, null);
         }
         for (in_flight_fences) |fence| {
             if (fence == .null_handle) continue;
-            vkd().destroyFence(device, fence, null);
+            device.destroyFence(fence, null);
         }
     }
 
     const semaphore_info = vk.SemaphoreCreateInfo{};
     const fence_info = vk.FenceCreateInfo{ .flags = .{ .signaled_bit = true } };
     for (0..max_frames_in_flight) |i| {
-        image_available_semaphores[i] = try vkd().createSemaphore(device, &semaphore_info, null);
-        render_finished_semaphores[i] = try vkd().createSemaphore(device, &semaphore_info, null);
-        in_flight_fences[i] = try vkd().createFence(device, &fence_info, null);
+        image_available_semaphores[i] = try device.createSemaphore(&semaphore_info, null);
+        render_finished_semaphores[i] = try device.createSemaphore(&semaphore_info, null);
+        in_flight_fences[i] = try device.createFence(&fence_info, null);
     }
 
     return .{
@@ -560,7 +599,7 @@ fn createSyncObjects(device: vk.Device) !SyncObjects {
 
 fn createFramebuffers(
     allocator: std.mem.Allocator,
-    device: vk.Device,
+    device: Device,
     extent: vk.Extent2D,
     image_count: u32,
     image_views: []vk.ImageView,
@@ -569,7 +608,7 @@ fn createFramebuffers(
     var framebuffers = try std.ArrayList(vk.Framebuffer).initCapacity(allocator, image_count);
     errdefer {
         for (framebuffers.items) |framebuffer| {
-            vkd().destroyFramebuffer(device, framebuffer, null);
+            device.destroyFramebuffer(framebuffer, null);
         }
         framebuffers.deinit();
     }
@@ -585,14 +624,14 @@ fn createFramebuffers(
             .layers = 1,
         };
 
-        const framebuffer = try vkd().createFramebuffer(device, &framebuffer_info, null);
+        const framebuffer = try device.createFramebuffer(&framebuffer_info, null);
         try framebuffers.append(framebuffer);
     }
 
     return framebuffers.toOwnedSlice();
 }
 
-fn createRenderPass(device: vk.Device, image_format: vk.Format) !vk.RenderPass {
+fn createRenderPass(device: Device, image_format: vk.Format) !vk.RenderPass {
     const color_attachment = vk.AttachmentDescription{
         .format = image_format,
         .samples = .{ .@"1_bit" = true },
@@ -634,5 +673,5 @@ fn createRenderPass(device: vk.Device, image_format: vk.Format) !vk.RenderPass {
         .p_dependencies = &dependencies,
     };
 
-    return vkd().createRenderPass(device, &renderpass_info, null);
+    return device.createRenderPass(&renderpass_info, null);
 }

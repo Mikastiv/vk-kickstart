@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
-    exe.root_module.addImport("vulkan-zig", vkzig_dep.module("vulkan-zig"));
+    exe.root_module.addImport("vulkan", vkzig_dep.module("vulkan-zig"));
 
     const glfw = b.dependency("glfw", .{
         .target = target,
