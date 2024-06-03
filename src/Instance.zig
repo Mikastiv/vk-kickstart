@@ -9,11 +9,26 @@ const root = @import("root");
 const log = @import("log.zig").vk_kickstart_log;
 const vk_log = @import("log.zig").vulkan_log;
 
-const vkb = dispatch.vkb;
-const vki = dispatch.vki;
+const api: []const vk.ApiInfo = &.{
+    .{
+        .base_commands = .{
+            .createInstance = true,
+            .getInstanceProcAddr = true,
+            .enumerateInstanceVersion = true,
+            .enumerateInstanceLayerProperties = true,
+            .enumerateInstanceExtensionProperties = true,
+        },
+        .instance_commands = .{
+            .destroyInstance = true,
+        },
+    },
+};
 
-const BaseDispatch = dispatch.BaseDispatch;
-const InstanceDispatch = dispatch.InstanceDispatch;
+const BaseDispatch = vk.BaseWrapper(api);
+const InstanceDispatch = vk.InstanceWrapper(api);
+
+var vkb: ?BaseDispatch = null;
+var vki: ?InstanceDispatch = null;
 
 const validation_layers: []const [*:0]const u8 = &.{"VK_LAYER_KHRONOS_validation"};
 
@@ -104,14 +119,13 @@ const Error = error{
 pub const CreateError = Error ||
     BaseDispatch.EnumerateInstanceExtensionPropertiesError ||
     BaseDispatch.EnumerateInstanceLayerPropertiesError ||
-    BaseDispatch.CreateInstanceError ||
-    InstanceDispatch.CreateDebugUtilsMessengerEXTError;
+    BaseDispatch.CreateInstanceError;
 
 pub fn create(
     loader: anytype,
     options: CreateOptions,
 ) CreateError!Instance {
-    try dispatch.initBaseDispatch(loader);
+    vkb = try BaseDispatch.load(loader);
 
     const api_version = try getAppropriateApiVersion(options.required_api_version);
     if (api_version < vk.API_VERSION_1_1) return error.UnsupportedInstanceVersion;
@@ -139,7 +153,7 @@ pub fn create(
 
     const portability_enumeration_support = isExtensionAvailable(
         available_extensions.constSlice(),
-        vk.extension_info.khr_portability_enumeration.name,
+        vk.extensions.khr_portability_enumeration.name,
     );
 
     const instance_info = vk.InstanceCreateInfo{
@@ -152,9 +166,9 @@ pub fn create(
         .p_next = p_next,
     };
 
-    const instance = try vkb().createInstance(&instance_info, options.allocation_callbacks);
-    try dispatch.initInstanceDispatch(instance);
-    errdefer vki().destroyInstance(instance, options.allocation_callbacks);
+    const instance = try vkb.?.createInstance(&instance_info, options.allocation_callbacks);
+    vki = try InstanceDispatch.load(instance, vkb.?.dispatch.vkGetInstanceProcAddr);
+    errdefer vki.?.destroyInstance(instance, options.allocation_callbacks);
 
     const debug_messenger = try createDebugMessenger(instance, options);
     errdefer destroyDebugMessenger(instance, debug_messenger, options.allocation_callbacks);
@@ -203,7 +217,7 @@ pub fn create(
 
 pub fn destroy(self: *const Instance) void {
     destroyDebugMessenger(self.handle, self.debug_messenger, self.allocation_callbacks);
-    vki().destroyInstance(self.handle, self.allocation_callbacks);
+    vki.?.destroyInstance(self.handle, self.allocation_callbacks);
 }
 
 fn defaultDebugMessageCallback(
@@ -238,7 +252,7 @@ fn createDebugMessenger(instance: vk.Instance, options: CreateOptions) !?vk.Debu
         .p_user_data = options.debug_user_data,
     };
 
-    return try vki().createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
+    return try vki.?.createDebugUtilsMessengerEXT(instance, &debug_info, options.allocation_callbacks);
 }
 
 fn destroyDebugMessenger(
@@ -249,7 +263,7 @@ fn destroyDebugMessenger(
     if (!build_options.enable_validation) return;
 
     std.debug.assert(debug_messenger != null);
-    vki().destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
+    vki.?.destroyDebugUtilsMessengerEXT(instance, debug_messenger.?, allocation_callbacks);
 }
 
 fn isExtensionAvailable(
@@ -290,17 +304,17 @@ fn getRequiredExtensions(
         }
     }
 
-    if (!try addExtension(available_extensions, vk.extension_info.khr_surface.name, &required_extensions)) {
+    if (!try addExtension(available_extensions, vk.extensions.khr_surface.name, &required_extensions)) {
         return error.SurfaceExtensionNotAvailable;
     }
 
     const windowing_extensions: []const [*:0]const u8 = switch (builtin.os.tag) {
-        .windows => &.{vk.extension_info.khr_win_32_surface.name},
-        .macos => &.{vk.extension_info.ext_metal_surface.name},
+        .windows => &.{vk.extensions.khr_win_32_surface.name},
+        .macos => &.{vk.extensions.ext_metal_surface.name},
         .linux => &.{
-            vk.extension_info.khr_xlib_surface,
-            vk.extension_info.khr_xcb_surface,
-            vk.extension_info.khr_wayland_surface,
+            vk.extensions.khr_xlib_surface.name,
+            vk.extensions.khr_xcb_surface.name,
+            vk.extensions.khr_wayland_surface.name,
         },
         else => @compileError("unsupported platform"),
     };
@@ -313,12 +327,12 @@ fn getRequiredExtensions(
     if (!added_one) return error.WindowingExtensionNotAvailable;
 
     if (build_options.enable_validation) {
-        if (!try addExtension(available_extensions, vk.extension_info.ext_debug_utils.name, &required_extensions)) {
+        if (!try addExtension(available_extensions, vk.extensions.ext_debug_utils.name, &required_extensions)) {
             return error.DebugMessengerExtensionNotAvailable;
         }
     }
 
-    _ = addExtension(available_extensions, vk.extension_info.khr_portability_enumeration.name, &required_extensions) catch {};
+    _ = addExtension(available_extensions, vk.extensions.khr_portability_enumeration.name, &required_extensions) catch {};
 
     return required_extensions;
 }
@@ -374,13 +388,13 @@ fn getRequiredLayers(
 
 fn getAvailableExtensions() !AvailableExtensionsArray {
     var extension_count: u32 = 0;
-    var result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, null);
+    var result = try vkb.?.enumerateInstanceExtensionProperties(null, &extension_count, null);
     if (result != .success) return error.EnumerateExtensionsFailed;
 
     var extensions = try AvailableExtensionsArray.init(extension_count);
 
     while (true) {
-        result = try vkb().enumerateInstanceExtensionProperties(null, &extension_count, &extensions.buffer);
+        result = try vkb.?.enumerateInstanceExtensionProperties(null, &extension_count, &extensions.buffer);
         if (result == .success) break;
     }
 
@@ -389,13 +403,13 @@ fn getAvailableExtensions() !AvailableExtensionsArray {
 
 fn getAvailableLayers() !AvailableLayersArray {
     var layer_count: u32 = 0;
-    var result = try vkb().enumerateInstanceLayerProperties(&layer_count, null);
+    var result = try vkb.?.enumerateInstanceLayerProperties(&layer_count, null);
     if (result != .success) return error.EnumerateLayersFailed;
 
     var layers = try AvailableLayersArray.init(layer_count);
 
     while (true) {
-        result = try vkb().enumerateInstanceLayerProperties(&layer_count, &layers.buffer);
+        result = try vkb.?.enumerateInstanceLayerProperties(&layer_count, &layers.buffer);
         if (result == .success) break;
     }
 
@@ -403,7 +417,7 @@ fn getAvailableLayers() !AvailableLayersArray {
 }
 
 fn getAppropriateApiVersion(required_version: u32) !u32 {
-    const instance_version = try vkb().enumerateInstanceVersion();
+    const instance_version = try vkb.?.enumerateInstanceVersion();
 
     if (instance_version < required_version)
         return error.RequiredVersionNotAvailable;

@@ -3,12 +3,12 @@
     .version = "0.0.0",
     .dependencies = .{
         .glfw = .{
-            .url = "https://pkg.machengine.org/glfw/8f7ca982913c0ab64df44d79d6ad2fb592e5ec39.tar.gz",
-            .hash = "122085745c053e68fea3772c7239c7c87bcc7f042fa3189592b30e0e39cbb9603d79",
+            .url = "https://pkg.machengine.org/glfw/e6f377baed70a7bef9fa08d808f40b64c5136bf6.tar.gz",
+            .hash = "1220c15e66c13f9633fcfd50b5ed265f74f2950c98b1f1defd66298fa027765e0190",
         },
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/e60869528c9da29d844aade1a8bb3caf45190d89.tar.gz",
-            .hash = "122061f0a16599a1c296a1847d6e34652e9b20ce3aff919d75562383ef0ba873df77",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/f2c2e0ff80374563357cc4fe72bf7d8a2c956824.tar.gz",
+            .hash = "1220cf0972c6fe05437c1a8689b955084385eb7ca1f8c14010d49ca5a89570a5d90d",
         },
         .vk_kickstart = .{
             .path = "../../",

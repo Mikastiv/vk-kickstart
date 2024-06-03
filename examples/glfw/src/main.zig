@@ -12,13 +12,6 @@ const vki = vkk.dispatch.vki; // Instance dispatch
 const vkd = vkk.dispatch.vkd; // Device dispatch
 
 pub const vkk_options = struct {
-    // Can override vulkan dispatch to choose what functions are loaded.
-    pub const vulkan_dispatch = struct {
-        // pub const base = dispatch.base;
-        // pub const instance = dispatch.instance;
-        pub const device = dispatch.device;
-    };
-
     // Constants below remove the need for an allocator. They all have default
     // values but can be overriden if they are too big/small.
 

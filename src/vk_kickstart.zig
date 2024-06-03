@@ -1,4 +1,3 @@
-pub const dispatch = @import("dispatch.zig");
 pub const Instance = @import("Instance.zig");
 pub const PhysicalDevice = @import("PhysicalDevice.zig");
 pub const Device = @import("Device.zig");
