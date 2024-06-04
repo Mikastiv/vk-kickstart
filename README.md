@@ -195,36 +195,5 @@ pub const CreateOptions = struct {
 
 Pass these options and a the logical device to `Swapchain.create()` to create the swapchain
 
-### Vulkan dispatchers
-
-`vk-kickstart` uses [`vulkan-zig`](https://github.com/Snektron/vulkan-zig) and you can access vulkan functions using it's dispatcher api with the functions `vkb()`, `vki()` and `vkd()`
-
-```zig
-const vkk = @import("vk-kickstart");
-const vkb = vkk.dispatch.vkb; // Base dispatch
-const vki = vkk.dispatch.vki; // Instance dispatch
-const vkd = vkk.dispatch.vkd; // Device dispatch
-```
-
-Not all functions are loaded by default. If you need other functions you will need to overwrite them in the root module like you would do for std.log.
-
-In your `main.zig`:
-```zig
-pub const vulkan_dispatch = struct {
-    pub const base = dispatch.base;
-    pub const instance = dispatch.instance;
-    pub const device = dispatch.device;
-};
-```
-
-See [dispatch.zig](examples/glfw/src/dispatch.zig) for their definition
-
-You can then use in your code any loaded vulkan functions:
-```zig
-vkd().createRenderPass();
-vkd().cmdDrawIndexed();
-vkd().allocateCommandBuffers();
-```
-
 ## Todo list
 - Headless mode
