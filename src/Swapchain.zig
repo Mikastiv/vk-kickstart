@@ -41,7 +41,6 @@ image_usage: vk.ImageUsageFlags,
 color_space: vk.ColorSpaceKHR,
 extent: vk.Extent2D,
 present_mode: vk.PresentModeKHR,
-allocation_callbacks: ?*const vk.AllocationCallbacks,
 
 pub const CreateOptions = struct {
     /// Graphics queue index
@@ -82,8 +81,6 @@ pub const CreateOptions = struct {
     old_swapchain: ?vk.SwapchainKHR = null,
     /// pNext chain
     p_next_chain: ?*anyopaque = null,
-    /// Vulkan allocation callbacks
-    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
 };
 
 const Error = error{
@@ -105,6 +102,7 @@ pub fn create(
     physical_device: vk.PhysicalDevice,
     surface: vk.SurfaceKHR,
     options: CreateOptions,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) CreateError!Swapchain {
     std.debug.assert(surface != .null_handle);
     std.debug.assert(physical_device != .null_handle);
@@ -152,8 +150,8 @@ pub fn create(
         .old_swapchain = if (options.old_swapchain) |old| old else .null_handle,
     };
 
-    const swapchain = try vkd().createSwapchainKHR(device, &swapchain_info, options.allocation_callbacks);
-    errdefer vkd().destroySwapchainKHR(device, swapchain, options.allocation_callbacks);
+    const swapchain = try vkd().createSwapchainKHR(device, &swapchain_info, allocation_callbacks);
+    errdefer vkd().destroySwapchainKHR(device, swapchain, allocation_callbacks);
 
     var image_count: u32 = undefined;
     const result = try vkd().getSwapchainImagesKHR(device, swapchain, &image_count, null);
@@ -169,8 +167,8 @@ pub fn create(
     }
 
     return .{
-        .device = device,
         .handle = swapchain,
+        .device = device,
         .surface = surface,
         .min_image_count = min_image_count,
         .image_count = image_count,
@@ -179,12 +177,7 @@ pub fn create(
         .extent = extent,
         .image_usage = options.image_usage_flags,
         .present_mode = present_mode,
-        .allocation_callbacks = options.allocation_callbacks,
     };
-}
-
-pub fn destroy(self: *const Swapchain) void {
-    vkd().destroySwapchainKHR(self.device, self.handle, self.allocation_callbacks);
 }
 
 pub const GetImagesError = error{GetSwapchainImagesFailed} || DeviceDispatch.GetSwapchainImagesKHRError;
@@ -236,13 +229,14 @@ pub fn getImageViews(
     self: *const Swapchain,
     images: []const vk.Image,
     buffer: []vk.ImageView,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsError!void {
     std.debug.assert(buffer.len == images.len);
 
     var initialized_count: u32 = 0;
     errdefer {
         for (0..initialized_count) |i| {
-            vkd().destroyImageView(self.device, buffer[i], self.allocation_callbacks);
+            vkd().destroyImageView(self.device, buffer[i], allocation_callbacks);
         }
     }
 
@@ -266,7 +260,7 @@ pub fn getImageViews(
             },
         };
 
-        buffer[i] = try vkd().createImageView(self.device, &image_view_info, self.allocation_callbacks);
+        buffer[i] = try vkd().createImageView(self.device, &image_view_info, allocation_callbacks);
         initialized_count += 1;
     }
 }
@@ -280,11 +274,12 @@ pub fn getImageViewsAlloc(
     self: *const Swapchain,
     allocator: std.mem.Allocator,
     images: []const vk.Image,
+    allocation_callbacks: ?*const vk.AllocationCallbacks,
 ) GetImageViewsErrorAlloc![]vk.ImageView {
     var image_views = try std.ArrayList(vk.ImageView).initCapacity(allocator, images.len);
     errdefer {
         for (image_views.items) |view| {
-            vkd().destroyImageView(self.device, view, self.allocation_callbacks);
+            vkd().destroyImageView(self.device, view, allocation_callbacks);
         }
         image_views.deinit();
     }
@@ -309,7 +304,7 @@ pub fn getImageViewsAlloc(
             },
         };
 
-        const view = try vkd().createImageView(self.device, &image_view_info, self.allocation_callbacks);
+        const view = try vkd().createImageView(self.device, &image_view_info, allocation_callbacks);
         try image_views.append(view);
     }
 

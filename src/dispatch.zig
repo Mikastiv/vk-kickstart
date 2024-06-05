@@ -6,12 +6,7 @@ const api: []const vk.ApiInfo = &.{
     vk.features.version_1_1,
     vk.extensions.khr_surface,
     vk.extensions.khr_swapchain,
-    .{
-        .instance_commands = .{
-            .createDebugUtilsMessengerEXT = if (build_options.enable_validation) true else false,
-            .destroyDebugUtilsMessengerEXT = if (build_options.enable_validation) true else false,
-        },
-    },
+    if (build_options.enable_validation) vk.extensions.ext_debug_utils else {},
 };
 
 pub const BaseDispatch = vk.BaseWrapper(api);

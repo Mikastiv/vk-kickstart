@@ -51,7 +51,7 @@ exe.root_module.addImport("vk-kickstart", kickstart_dep.module("vk-kickstart"));
 You can then import `vk-kickstart` as a module and vulkan-zig
 ```zig
 const vkk = @import("vk-kickstart");
-const vk = @import("vulkan-zig");
+const vk = @import("vulkan");
 ```
 
 See [build.zig](examples/glfw/build.zig) for an example
@@ -62,7 +62,7 @@ For a code example, see [main.zig](examples/glfw/src/main.zig)
 
 ### Instance creation
 
-Using the `Instance.CreateOptions` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
+Using the `instance.CreateOptions` struct's fields, you can you can choose how you want the instance to be configured like the required api version.
 
 Note: VK_KHR_surface and the platform specific surface extension are automatically enabled. Only works for Windows, MacOS and Linux (xcb, xlib or wayland) for now
 
@@ -70,37 +70,29 @@ Note: VK_KHR_surface and the platform specific surface extension are automatical
 const vk = @import("vulkan-zig");
 
 pub const CreateOptions = struct {
-    /// Application name
+    /// Application name.
     app_name: [*:0]const u8 = "",
-    /// Application version
+    /// Application version.
     app_version: u32 = 0,
-    /// Engine name
+    /// Engine name.
     engine_name: [*:0]const u8 = "",
-    /// Engine version
+    /// Engine version.
     engine_version: u32 = 0,
-    /// Required Vulkan version (minimum 1.1)
+    /// Required Vulkan version (minimum 1.1).
     required_api_version: u32 = vk.API_VERSION_1_1,
-    /// Array of required extensions to enable
-    /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled
+    /// Array of required extensions to enable.
+    /// Note: VK_KHR_surface and the platform specific surface extension are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
-    /// Array of required layers to enable
+    /// Array of required layers to enable.
     required_layers: []const [*:0]const u8 = &.{},
-    /// Vulkan allocation callbacks
-    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
-    /// Custom debug callback function (or use default)
-    debug_callback: vk.PfnDebugUtilsMessengerCallbackEXT = defaultDebugMessageCallback,
-    /// Debug message severity filter
-    debug_message_severity: vk.DebugUtilsMessageSeverityFlagsEXT = default_message_severity,
-    /// Debug message type filter
-    debug_message_type: vk.DebugUtilsMessageTypeFlagsEXT = default_message_type,
-    /// Debug user data pointer
-    debug_user_data: ?*anyopaque = null,
-    /// pNext chain
+    /// pNext chain.
     p_next_chain: ?*anyopaque = null,
+    /// Debug messenger options
+    debug: DebugMessengerOptions = .{},
 };
 ```
 
-Pass these options to `Instance.create()` to create an instance
+Pass these options to `instance.create()` to create an instance
 
 ### Physical device selection
 
@@ -112,30 +104,30 @@ Note: VK_KHR_subset (if available) and VK_KHR_swapchain are automatically enable
 const vk = @import("vulkan-zig");
 
 pub const SelectOptions = struct {
-    /// Vulkan render surface
+    /// Vulkan render surface.
     surface: vk.SurfaceKHR,
-    /// Name of the device to select
+    /// Name of the device to select.
     name: ?[*:0]const u8 = null,
-    /// Required Vulkan version (minimum 1.1)
+    /// Required Vulkan version (minimum 1.1).
     required_api_version: u32 = vk.API_VERSION_1_1,
-    /// Prefered physical device type
+    /// Prefered physical device type.
     preferred_type: vk.PhysicalDeviceType = .discrete_gpu,
-    /// Transfer queue preference
+    /// Transfer queue preference.
     transfer_queue: QueuePreference = .none,
-    /// Compute queue preference
+    /// Compute queue preference.
     compute_queue: QueuePreference = .none,
-    /// Required local memory size
+    /// Required local memory size.
     required_mem_size: vk.DeviceSize = 0,
-    /// Required physical device features
+    /// Required physical device features.
     required_features: vk.PhysicalDeviceFeatures = .{},
-    /// Required physical device feature version 1.1
+    /// Required physical device feature version 1.1.
     required_features_11: vk.PhysicalDeviceVulkan11Features = .{},
-    /// Required physical device feature version 1.2
+    /// Required physical device feature version 1.2.
     required_features_12: ?vk.PhysicalDeviceVulkan12Features = null,
-    /// Required physical device feature version 1.3
+    /// Required physical device feature version 1.3.
     required_features_13: ?vk.PhysicalDeviceVulkan13Features = null,
-    /// Array of required physical device extensions to enable
-    /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled
+    /// Array of required physical device extensions to enable.
+    /// Note: VK_KHR_swapchain and VK_KHR_subset (if available) are automatically enabled.
     required_extensions: []const [*:0]const u8 = &.{},
 };
 ```
@@ -144,7 +136,7 @@ Pass these options to `PhysicalDevice.select()` to select a device
 
 ### Device creation
 
-For this, you only need to call `Device.create()` with the previously selected physical device
+For this, you only need to call `device.create()` with the previously selected physical device
 
 ### Swapchain creation
 
@@ -154,26 +146,30 @@ Finally to create a swapchain, use `Swapchain.CreateOptions`
 const vk = @import("vulkan-zig");
 
 pub const CreateOptions = struct {
-    /// Desired size (in pixels) of the swapchain image(s)
+    /// Graphics queue index
+    graphics_queue_index: u32,
+    /// Present queue index
+    present_queue_index: u32,
+    /// Desired size (in pixels) of the swapchain image(s).
     /// These values will be clamped within the capabilities of the device
     desired_extent: vk.Extent2D,
     /// Swapchain create flags
     create_flags: vk.SwapchainCreateFlagsKHR = .{},
-    /// Desired minimum number of presentable images that the application needs
-    /// If left on default, will try to use the minimum of the device + 1
-    /// This value will be clamped between the device's minimum and maximum (if there is a max)
+    /// Desired minimum number of presentable images that the application needs.
+    /// If left on default, will try to use the minimum of the device + 1.
+    /// This value will be clamped between the device's minimum and maximum (if there is a max).
     desired_min_image_count: ?u32 = null,
-    /// Array of desired image formats, in order of priority
+    /// Array of desired image formats, in order of priority.
     /// Will fallback to the first found if none match
     desired_formats: []const vk.SurfaceFormatKHR = &.{
         .{ .format = .b8g8r8a8_srgb, .color_space = .srgb_nonlinear_khr },
     },
-    /// Array of desired present modes, in order of priority
-    /// Will fallback to fifo_khr if none match
+    /// Array of desired present modes, in order of priority.
+    /// Will fallback to fifo_khr is none match
     desired_present_modes: []const vk.PresentModeKHR = &.{
         .mailbox_khr,
     },
-    /// Desired number of views in a multiview/stereo surface
+    /// Desired number of views in a multiview/stereo surface.
     /// Will be clamped down if higher than device's max
     desired_array_layer_count: u32 = 1,
     /// Intended usage of the (acquired) swapchain images
@@ -188,8 +184,6 @@ pub const CreateOptions = struct {
     old_swapchain: ?vk.SwapchainKHR = null,
     /// pNext chain
     p_next_chain: ?*anyopaque = null,
-    /// Vulkan allocation callbacks
-    allocation_callbacks: ?*const vk.AllocationCallbacks = null,
 };
 ```
 

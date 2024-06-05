@@ -83,8 +83,9 @@ pub fn main() !void {
             .present_queue_index = ctx.present_queue_index,
             .desired_extent = .{ .width = window_width, .height = window_height },
         },
+        null,
     );
-    defer swapchain.destroy();
+    defer device.destroySwapchainKHR(swapchain.handle, null);
 
     var images = try allocator.alloc(vk.Image, swapchain.image_count);
     defer allocator.free(images);
@@ -94,7 +95,7 @@ pub fn main() !void {
     var image_views = try allocator.alloc(vk.ImageView, swapchain.image_count);
     defer allocator.free(image_views);
 
-    try swapchain.getImageViews(images, image_views);
+    try swapchain.getImageViews(images, image_views, null);
     defer {
         for (image_views) |view| {
             device.destroyImageView(view, null);
@@ -273,17 +274,18 @@ fn recreateSwapchain(
             .desired_extent = .{ .width = extent.width, .height = extent.height },
             .old_swapchain = old_swapchain.handle,
         },
+        null,
     );
 
     for (image_views.*) |view| {
         ctx.device.destroyImageView(view, null);
     }
-    old_swapchain.destroy();
+    ctx.device.destroySwapchainKHR(old_swapchain.handle, null);
 
     destroyFramebuffers(allocator, ctx.device, framebuffers.*);
 
     try swapchain.getImages(images.*);
-    try swapchain.getImageViews(images.*, image_views.*);
+    try swapchain.getImageViews(images.*, image_views.*, null);
     framebuffers.* = try createFramebuffers(
         allocator,
         ctx.device,
