@@ -123,7 +123,8 @@ pub fn create(
     if (isSharedPresentMode(present_mode)) {
         // TODO: Shared present modes check
     } else {
-        if (!options.image_usage_flags.contains(surface_support.capabilities.supported_usage_flags))
+        const supported_flags = surface_support.capabilities.supported_usage_flags;
+        if (options.image_usage_flags.intersect(supported_flags).toInt() == 0)
             return error.UsageFlagsNotSupported;
     }
 
@@ -312,10 +313,10 @@ pub fn getImageViewsAlloc(
 }
 
 fn isSharedPresentMode(present_mode: vk.PresentModeKHR) bool {
-    return present_mode == .immediate_khr or
+    return !(present_mode == .immediate_khr or
         present_mode == .mailbox_khr or
         present_mode == .fifo_khr or
-        present_mode == .fifo_relaxed_khr;
+        present_mode == .fifo_relaxed_khr);
 }
 
 fn pickSurfaceFormat(
