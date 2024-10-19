@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "enable_validation", enable_validation orelse false);
     build_options.addOption(bool, "verbose", verbose orelse false);
 
-    const vkzig_dep = b.dependency("vulkan_zig", .{
+    const vkzig_dep = b.dependency("vulkan", .{
         .registry = registry,
     });
 

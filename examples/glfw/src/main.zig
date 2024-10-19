@@ -4,7 +4,6 @@ const vk = @import("vulkan");
 const vkk = @import("vk-kickstart");
 const dispatch = @import("dispatch.zig");
 const Window = @import("Window.zig");
-const Shaders = @import("shaders");
 const GraphicsContext = @import("GraphicsContext.zig");
 const Device = GraphicsContext.Device;
 const Queue = GraphicsContext.Queue;
@@ -111,9 +110,11 @@ pub fn main() !void {
     const sync = try createSyncObjects(device);
     defer destroySyncObjects(device, sync);
 
-    const vertex_shader = try createShaderModule(device, &Shaders.shader_vert);
+    const vertex_shader_bytes align(@alignOf(u32)) = @embedFile("shader_vert").*;
+    const vertex_shader = try createShaderModule(device, &vertex_shader_bytes);
     defer device.destroyShaderModule(vertex_shader, null);
-    const fragment_shader = try createShaderModule(device, &Shaders.shader_frag);
+    const fragment_shader_bytes align(@alignOf(u32)) = @embedFile("shader_frag").*;
+    const fragment_shader = try createShaderModule(device, &fragment_shader_bytes);
     defer device.destroyShaderModule(fragment_shader, null);
 
     const pipeline_layout_info = vk.PipelineLayoutCreateInfo{};

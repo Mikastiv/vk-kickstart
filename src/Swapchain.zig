@@ -26,7 +26,7 @@ else
     32;
 
 /// Max number of present modes.
-pub const max_present_modes = @typeInfo(vk.PresentModeKHR).Enum.fields.len;
+pub const max_present_modes = @typeInfo(vk.PresentModeKHR).@"enum".fields.len;
 
 const SurfaceFormatsArray = std.BoundedArray(vk.SurfaceFormatKHR, max_surface_formats);
 const PresentModesArray = std.BoundedArray(vk.PresentModeKHR, max_present_modes);

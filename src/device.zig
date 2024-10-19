@@ -103,8 +103,8 @@ pub fn create(
 
 fn printEnabledFeatures(comptime T: type, features: T) void {
     const info = @typeInfo(T);
-    if (info != .Struct) @compileError("must be a struct");
-    inline for (info.Struct.fields) |field| {
+    if (info != .@"struct") @compileError("must be a struct");
+    inline for (info.@"struct".fields) |field| {
         if (field.type == vk.Bool32 and @field(features, field.name) != 0) {
             log.debug(" - {s}", .{field.name});
         }

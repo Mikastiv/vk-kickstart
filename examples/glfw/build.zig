@@ -1,5 +1,4 @@
 const std = @import("std");
-const vkgen = @import("vulkan_zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -14,7 +13,7 @@ pub fn build(b: *std.Build) void {
 
     const xml_path: []const u8 = b.pathFromRoot("vk.xml");
 
-    const vkzig_dep = b.dependency("vulkan_zig", .{
+    const vkzig_dep = b.dependency("vulkan", .{
         .registry = xml_path,
     });
 
@@ -33,10 +32,8 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibrary(glfw.artifact("glfw"));
 
-    const shaders = vkgen.ShaderCompileStep.create(b, &.{ "glslc", "--target-env=vulkan1.1" }, "-o");
-    shaders.add("shader_vert", "shaders/shader.vert", .{});
-    shaders.add("shader_frag", "shaders/shader.frag", .{});
-    exe.root_module.addImport("shaders", shaders.getModule());
+    addShader(b, exe, "shaders/shader.vert", "shader_vert");
+    addShader(b, exe, "shaders/shader.frag", "shader_frag");
 
     b.installArtifact(exe);
 
@@ -50,15 +47,18 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+}
 
-    const exe_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+fn addShader(b: *std.Build, step: *std.Build.Step.Compile, path: []const u8, name: []const u8) void {
+    var hasher = std.hash.Wyhash.init(0);
+    hasher.update(path);
+    const hash = hasher.final();
+    const hex = std.fmt.allocPrint(b.allocator, "{x}", .{hash}) catch @panic("OOM");
+    const output_name = std.mem.join(b.allocator, "", &.{ hex, ".spv" }) catch @panic("OOM");
 
-    const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
+    const shaderc = b.addSystemCommand(&.{ "glslc", "--target-env=vulkan1.2", "-o" });
+    const shader_spv = shaderc.addOutputFileArg(output_name);
+    shaderc.addFileArg(b.path(path));
 
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_exe_unit_tests.step);
+    step.root_module.addAnonymousImport(name, .{ .root_source_file = shader_spv });
 }
